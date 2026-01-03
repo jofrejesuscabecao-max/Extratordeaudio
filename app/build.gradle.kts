@@ -14,7 +14,7 @@ android {
         versionCode = 1
         versionName = "1.0"
 
-        // Força arquitetura ARM64 para evitar erros de binário
+        // Isso é crucial para bibliotecas que usam código nativo (C++)
         ndk {
             abiFilters.add("arm64-v8a")
         }
@@ -47,12 +47,10 @@ dependencies {
     implementation("com.google.android.material:material:1.11.0")
     implementation("androidx.constraintlayout:constraintlayout:2.1.4")
 
-    // --- CORREÇÃO FINAL ---
-    // O erro anterior estava no nome "ya-username" (errado). 
-    // O correto é "yausername" (sem traço).
-    // Versão 0.14.6 confirmada como estável no JitPack.
-    implementation("com.github.yausername.youtubedl-android:library:0.14.6")
-    implementation("com.github.yausername.youtubedl-android:ffmpeg:0.14.6")
+    // --- CORREÇÃO DEFINITIVA ---
+    // Versão 0.15.0 confirmada como existente e estável no repositório JitPack
+    implementation("com.github.yausername.youtubedl-android:library:0.15.0")
+    implementation("com.github.yausername.youtubedl-android:ffmpeg:0.15.0")
     
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
 }
