@@ -2,6 +2,7 @@ package com.example.audioextractor
 
 import android.Manifest
 import android.content.ContentValues
+import android.content.Context
 import android.content.pm.PackageManager
 import android.media.MediaPlayer
 import android.net.Uri
@@ -38,12 +39,11 @@ class MainActivity : AppCompatActivity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        // Tenta iniciar imediatamente
+        // Inicia o sistema
         inicializarSistema()
 
         binding.btnDownload.setOnClickListener {
             if (!isInitialized) {
-                // Tenta reiniciar se falhou antes
                 inicializarSistema()
                 return@setOnClickListener
             }
@@ -66,10 +66,10 @@ class MainActivity : AppCompatActivity() {
         
         lifecycleScope.launch(Dispatchers.IO) {
             try {
-                // Inicialização crítica
+                // Inicializa a biblioteca (extrai os arquivos)
                 YoutubeDL.getInstance().init(applicationContext)
                 
-                // Opcional: Tentar atualizar (pode falhar sem internet, ignoramos o erro)
+                // Tenta atualizar (opcional)
                 try { YoutubeDL.getInstance().updateYoutubeDL(applicationContext) } catch (e: Exception) {}
 
                 isInitialized = true
@@ -82,14 +82,13 @@ class MainActivity : AppCompatActivity() {
                 runOnUiThread {
                     binding.tvStatus.text = "Erro no motor."
                     mostrarAlerta("Falha de Inicialização", 
-                        "O aplicativo não conseguiu preparar os arquivos necessários.\n\nErro: ${e.message}\n\nTente reinstalar o app.")
+                        "O aplicativo não conseguiu preparar os arquivos.\n\nErro: ${e.message}")
                 }
             }
         }
     }
 
     private fun iniciarDownload(url: String) {
-        // Verifica permissão (Android 9-)
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
                 ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.WRITE_EXTERNAL_STORAGE), 100)
@@ -109,22 +108,23 @@ class MainActivity : AppCompatActivity() {
 
                 val request = YoutubeDLRequest(url)
                 
-                // --- CORREÇÃO: DIZER ONDE ESTÁ O FFMPEG ---
-                val ffmpegPath = YoutubeDL.getInstance().ffmpegPath(applicationContext)
-                if (ffmpegPath != null) {
-                    request.addOption("--ffmpeg-location", ffmpegPath)
+                // --- CORREÇÃO SEGURA: BUSCA MANUAL DO FFMPEG ---
+                // Não usamos mais a função privada. Nós mesmos achamos o arquivo.
+                val ffmpegFile = encontrarFfmpeg(applicationContext)
+                if (ffmpegFile != null) {
+                    // Passa o caminho exato para o comando
+                    request.addOption("--ffmpeg-location", ffmpegFile.absolutePath)
                 }
 
-                // Configurações Padrão
-                request.addOption("-x") // Extrair áudio
+                // Opções para evitar erros de JavaScript e Formato
+                request.addOption("-x")
                 request.addOption("--audio-format", "m4a")
                 request.addOption("--no-playlist")
-                
-                // --- TRUQUES PARA EVITAR ERRO DE JAVASCRIPT ---
                 request.addOption("--no-check-certificate")
-                request.addOption("--prefer-free-formats") 
-                // Evita formatos que exigem login ou javascript pesado
-                request.addOption("--format", "bestaudio[ext=m4a]/bestaudio/best") 
+                // Força usar apenas ipv4 para evitar bloqueios do Google
+                request.addOption("--force-ipv4")
+                // Tenta extrair o melhor áudio disponível
+                request.addOption("-f", "bestaudio[ext=m4a]/bestaudio/best")
                 
                 request.addOption("-o", "${tempDir.absolutePath}/%(title)s.%(ext)s")
                 request.addOption("--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/118.0.0.0 Safari/537.36")
@@ -152,7 +152,7 @@ class MainActivity : AppCompatActivity() {
                         }
                     }
                 } else {
-                    throw Exception("Arquivo não encontrado após download.")
+                    throw Exception("O arquivo não foi encontrado após o processo.")
                 }
 
             } catch (e: Exception) {
@@ -167,6 +167,30 @@ class MainActivity : AppCompatActivity() {
                     binding.btnDownload.isEnabled = true
                 }
             }
+        }
+    }
+
+    // --- FUNÇÃO "CAÇA-ARQUIVO" ---
+    // Varre as pastas internas do app procurando onde o ffmpeg se escondeu
+    private fun encontrarFfmpeg(context: Context): File? {
+        try {
+            // Locais comuns onde a biblioteca descompacta os arquivos
+            val locaisPossiveis = listOf(
+                File(context.applicationInfo.nativeLibraryDir, "libffmpeg.so"),
+                File(context.noBackupFilesDir, "youtubedl-android/ffmpeg"),
+                File(context.noBackupFilesDir, "ffmpeg"),
+                File(context.filesDir, "ffmpeg")
+            )
+
+            // Tenta achar um que exista
+            for (arquivo in locaisPossiveis) {
+                if (arquivo.exists()) return arquivo
+            }
+            
+            // Busca recursiva se não achar nos locais padrão
+            return context.noBackupFilesDir.walkTopDown().find { it.name.contains("ffmpeg") }
+        } catch (e: Exception) {
+            return null
         }
     }
 
