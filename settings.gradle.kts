@@ -10,7 +10,7 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
-        // OBRIGATÓRIO: O servidor onde a biblioteca está hospedada
+        // JitPack fica aqui como backup, mas a biblioteca principal virá do MavenCentral
         maven { url = uri("https://jitpack.io") } 
     }
 }
