@@ -1,6 +1,7 @@
 package com.example.audioextractor
 
 import android.Manifest
+import android.content.ContentValues // <--- O IMPORT QUE FALTAVA
 import android.content.Context
 import android.content.pm.PackageManager
 import android.media.MediaPlayer
@@ -64,10 +65,7 @@ class MainActivity : AppCompatActivity() {
         
         lifecycleScope.launch(Dispatchers.IO) {
             try {
-                // Inicializa a biblioteca e extrai os binários
                 YoutubeDL.getInstance().init(applicationContext)
-                
-                // Tenta atualizar se possível
                 try { YoutubeDL.getInstance().updateYoutubeDL(applicationContext) } catch (e: Exception) {}
 
                 isInitialized = true
@@ -105,30 +103,27 @@ class MainActivity : AppCompatActivity() {
 
                 val request = YoutubeDLRequest(url)
                 
-                // --- ESTRATÉGIA FFMPEG ---
-                // Tenta localizar o binário do ffmpeg que a biblioteca extraiu
+                // Busca FFmpeg (Correção Manual)
                 val ffmpegLib = File(applicationContext.applicationInfo.nativeLibraryDir, "libffmpeg.so")
                 if (ffmpegLib.exists()) {
                      request.addOption("--ffmpeg-location", ffmpegLib.absolutePath)
                 } else {
-                     // Tenta buscar na pasta de arquivos se não estiver na lib nativa
                      val ffmpegFile = File(applicationContext.filesDir, "ffmpeg")
                      if (ffmpegFile.exists()) {
                          request.addOption("--ffmpeg-location", ffmpegFile.absolutePath)
                      }
                 }
 
-                // --- CONFIGURAÇÕES BYPASS ---
+                // Configurações
                 request.addOption("-x")
                 request.addOption("--audio-format", "m4a")
                 request.addOption("--no-playlist")
                 request.addOption("--no-check-certificate")
                 
-                // Opções críticas para pular verificações de JS
+                // Argumentos Críticos para Bypass
                 request.addOption("--extractor-args", "youtube:player_client=android,web")
                 request.addOption("--force-ipv4")
                 
-                // Tenta baixar o melhor áudio disponível diretamente
                 request.addOption("-f", "bestaudio[ext=m4a]/bestaudio/best")
                 
                 request.addOption("-o", "${tempDir.absolutePath}/%(title)s.%(ext)s")
@@ -176,6 +171,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun salvarDownloads(arquivo: File): Uri? {
+        // Agora ContentValues vai funcionar porque foi importado
         val valores = ContentValues().apply {
             put(MediaStore.MediaColumns.DISPLAY_NAME, "Audio_${System.currentTimeMillis()}.m4a")
             put(MediaStore.MediaColumns.MIME_TYPE, "audio/mp4")
