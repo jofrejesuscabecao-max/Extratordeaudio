@@ -9,6 +9,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Environment
 import android.provider.MediaStore
+import android.util.Log
 import android.view.View
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
@@ -30,6 +31,7 @@ class MainActivity : AppCompatActivity() {
     private var lastDownloadedUri: Uri? = null
     private var mediaPlayer: MediaPlayer? = null
     private var isInitialized = false
+    private var isPlaying = false // Controle de estado
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -48,10 +50,58 @@ class MainActivity : AppCompatActivity() {
             else Toast.makeText(this, "Cole um link válido", Toast.LENGTH_SHORT).show()
         }
 
+        // Lógica Inteligente do Botão Play/Pause
         binding.btnPlay.setOnClickListener {
-            lastDownloadedUri?.let { tocarAudio(it) }
+            lastDownloadedUri?.let { uri -> controlarPlayer(uri) }
         }
     }
+
+    // --- LÓGICA DO PLAYER (NOVA) ---
+    private fun controlarPlayer(uri: Uri) {
+        try {
+            if (mediaPlayer == null) {
+                // Primeira vez tocando
+                iniciarPlayer(uri)
+            } else {
+                if (mediaPlayer!!.isPlaying) {
+                    // Se está tocando -> PAUSA
+                    mediaPlayer!!.pause()
+                    binding.btnPlay.text = "▶  CONTINUAR"
+                    binding.btnPlay.setBackgroundColor(android.graphics.Color.parseColor("#FF9800")) // Laranja
+                } else {
+                    // Se está pausado -> TOCA
+                    mediaPlayer!!.start()
+                    binding.btnPlay.text = "⏸  PAUSAR"
+                    binding.btnPlay.setBackgroundColor(android.graphics.Color.parseColor("#E91E63")) // Rosa/Vermelho
+                }
+            }
+        } catch (e: Exception) {
+            Toast.makeText(this, "Erro no player", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun iniciarPlayer(uri: Uri) {
+        // Reseta qualquer player anterior
+        mediaPlayer?.release()
+        
+        mediaPlayer = MediaPlayer().apply {
+            setDataSource(applicationContext, uri)
+            prepare()
+            start()
+            
+            // Quando a música acabar, reseta o botão
+            setOnCompletionListener {
+                binding.btnPlay.text = "▶  TOCAR NOVAMENTE"
+                binding.btnPlay.setBackgroundColor(android.graphics.Color.parseColor("#4CAF50")) // Verde
+            }
+        }
+        
+        // Atualiza visual
+        binding.btnPlay.text = "⏸  PAUSAR"
+        binding.btnPlay.setBackgroundColor(android.graphics.Color.parseColor("#E91E63")) // Rosa
+    }
+
+    // --- RESTO DO CÓDIGO (MANTIDO IGUAL) ---
 
     private fun inicializarSistema() {
         binding.tvStatus.text = "Carregando..."
@@ -71,6 +121,11 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun iniciarDownload(url: String) {
+        // Reseta o player se estiver tocando algo antigo
+        mediaPlayer?.release()
+        mediaPlayer = null
+        binding.cardPlayer.visibility = View.GONE // Esconde o player antigo
+
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
                 ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.WRITE_EXTERNAL_STORAGE), 100)
@@ -89,7 +144,6 @@ class MainActivity : AppCompatActivity() {
                 tempDir.listFiles()?.forEach { it.delete() }
 
                 val request = YoutubeDLRequest(url)
-                
                 val ffmpegLib = File(applicationContext.applicationInfo.nativeLibraryDir, "libffmpeg.so")
                 if (ffmpegLib.exists()) request.addOption("--ffmpeg-location", ffmpegLib.absolutePath)
                 else {
@@ -97,15 +151,10 @@ class MainActivity : AppCompatActivity() {
                     if (f.exists()) request.addOption("--ffmpeg-location", f.absolutePath)
                 }
 
-                // --- ÚLTIMA TENTATIVA NATIVA ---
-                // 'android_creator' (YouTube Studio) costuma ter menos bloqueios de Token
+                // MANTER ESSA LÓGICA (ELA QUE FUNCIONOU)
                 request.addOption("--extractor-args", "youtube:player_client=android_creator")
-                
                 request.addOption("--no-check-certificate")
-                
-                // Pega o melhor áudio disponível
                 request.addOption("-f", "bestaudio[ext=m4a]/bestaudio/best")
-                
                 request.addOption("-o", "${tempDir.absolutePath}/%(title)s.%(ext)s")
 
                 runOnUiThread { binding.tvStatus.text = "Baixando..." }
@@ -121,8 +170,14 @@ class MainActivity : AppCompatActivity() {
                     runOnUiThread {
                         if (uri != null) {
                             lastDownloadedUri = uri
+                            // Mostra o Player Bonito
                             binding.tvStatus.text = "Sucesso!"
-                            binding.btnPlay.isEnabled = true
+                            binding.tvFileName.text = arquivoBaixado.name
+                            binding.cardPlayer.visibility = View.VISIBLE
+                            binding.btnPlay.text = "▶  TOCAR AGORA"
+                            binding.btnPlay.setBackgroundColor(android.graphics.Color.parseColor("#4CAF50"))
+                            
+                            binding.btnDownload.isEnabled = true
                             mostrarAlerta("Sucesso", "Salvo em Downloads!")
                         } else {
                             binding.tvStatus.text = "Erro salvar"
@@ -163,23 +218,17 @@ class MainActivity : AppCompatActivity() {
         } catch (e: Exception) { null }
     }
 
-    private fun tocarAudio(uri: Uri) {
-        try {
-            mediaPlayer?.release()
-            mediaPlayer = MediaPlayer().apply {
-                setDataSource(applicationContext, uri)
-                prepare()
-                start()
-            }
-        } catch (e: Exception) { Toast.makeText(this, "Erro play", Toast.LENGTH_SHORT).show() }
-    }
-
     private fun mostrarAlerta(titulo: String, msg: String) {
         AlertDialog.Builder(this)
             .setTitle(titulo)
             .setMessage(msg)
             .setPositiveButton("OK", null)
             .show()
+    }
+    
+    override fun onDestroy() {
+        super.onDestroy()
+        mediaPlayer?.release()
     }
 }
 
