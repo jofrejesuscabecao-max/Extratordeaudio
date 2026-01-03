@@ -29,7 +29,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import java.io.File
 import java.io.FileInputStream
-import java.io.FileOutputStream // Import necessário
+import java.io.FileOutputStream
 
 class MainActivity : AppCompatActivity() {
 
@@ -43,6 +43,7 @@ class MainActivity : AppCompatActivity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
+        // Configuração do WebView (Mantemos apenas para garantir que a rede esteja "ativa" para o domínio)
         configurarWebView()
         inicializarSistema()
 
@@ -55,12 +56,12 @@ class MainActivity : AppCompatActivity() {
 
             if (!isInitialized) {
                 inicializarSistema()
-                Toast.makeText(this, "Sistema iniciando... aguarde", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, "Sistema iniciando...", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
             
-            // PASSO 1: O WebView acessa para validar a sessão
-            autenticarViaNavegador(url)
+            // Inicia o download diretamente, sem pré-autenticação manual complexa que estava falhando
+            iniciarDownloadReal(url)
         }
 
         binding.btnPlay.setOnClickListener {
@@ -72,8 +73,8 @@ class MainActivity : AppCompatActivity() {
         val webView = binding.webViewEspiao
         webView.settings.javaScriptEnabled = true
         webView.settings.domStorageEnabled = true
-        // User Agent genérico de Android
-        webView.settings.userAgentString = "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
+        // User Agent padrão do sistema para não gerar suspeita
+        webView.settings.userAgentString = WebSettings.getDefaultUserAgent(this)
         
         CookieManager.getInstance().setAcceptCookie(true)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
@@ -81,50 +82,10 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun autenticarViaNavegador(url: String) {
+    private fun iniciarDownloadReal(url: String) {
+        binding.tvStatus.text = "Iniciando download..."
         binding.progressBar.visibility = View.VISIBLE
         binding.btnDownload.isEnabled = false
-        binding.tvStatus.text = "Validando acesso..."
-        
-        val webView = binding.webViewEspiao
-        
-        webView.webViewClient = object : WebViewClient() {
-            override fun onPageFinished(view: WebView?, urlCarregada: String?) {
-                super.onPageFinished(view, urlCarregada)
-                
-                val cookies = CookieManager.getInstance().getCookie(urlCarregada)
-                val userAgent = view?.settings?.userAgentString ?: "Mozilla/5.0"
-                
-                // Em vez de passar no header (que falhou), vamos salvar num arquivo temporário
-                // O yt-dlp aceita arquivo de cookies melhor que header cru
-                val cookieFile = salvarCookiesEmArquivo(cookies)
-                
-                iniciarDownloadReal(url, cookieFile, userAgent)
-            }
-        }
-        
-        webView.loadUrl(url)
-    }
-    
-    // Função auxiliar para criar arquivo de cookies compatível
-    private fun salvarCookiesEmArquivo(cookieString: String?): File? {
-        if (cookieString == null) return null
-        return try {
-            val file = File(cacheDir, "cookies.txt")
-            // Formato Netscape simplificado (domínio, flag, path, secure, expiration, name, value)
-            // Como o CookieManager retorna só "nome=valor", vamos tentar escrever o header puro
-            // O yt-dlp aceita formato HTTP Header se passado corretamente, mas a opção --cookies exige arquivo Netscape.
-            // A melhor aposta segura: NÃO passar cookies se estiver dando erro de segurança,
-            // e confiar apenas no UserAgent e Client.
-            
-            // Vamos retornar null aqui para DESATIVAR a injeção manual que causou o erro.
-            // Se o YouTube bloqueou por "Security Risk", melhor ir sem cookie do que com cookie errado.
-            null 
-        } catch (e: Exception) { null }
-    }
-
-    private fun iniciarDownloadReal(url: String, cookieFile: File?, userAgent: String) {
-        binding.tvStatus.text = "Iniciando download..."
 
         lifecycleScope.launch(Dispatchers.IO) {
             try {
@@ -141,9 +102,9 @@ class MainActivity : AppCompatActivity() {
 
                 val request = YoutubeDLRequest(url)
                 
-                // CORREÇÃO: Removemos a injeção de Cookie que causava "Security Risk" e "Initial Data Error".
-                // Confiamos apenas no User Agent consistente.
-                request.addOption("--user-agent", userAgent)
+                // --- ESTRATÉGIA LIMPA ---
+                // Removemos configurações manuais de UserAgent e Cookies que estavam gerando conflito (Signature extraction failed).
+                // Deixamos o yt-dlp escolher a melhor rota automaticamente.
 
                 val ffmpegLib = File(applicationContext.applicationInfo.nativeLibraryDir, "libffmpeg.so")
                 if (ffmpegLib.exists()) request.addOption("--ffmpeg-location", ffmpegLib.absolutePath)
@@ -152,11 +113,15 @@ class MainActivity : AppCompatActivity() {
                     if (f.exists()) request.addOption("--ffmpeg-location", f.absolutePath)
                 }
 
-                // Cliente 'mweb' (Mobile Web) ainda é a melhor aposta com UserAgent de celular
-                request.addOption("--extractor-args", "youtube:player_client=mweb")
+                // Usamos o cliente 'android' padrão. Ele é o mais robusto quando não há cookies envolvidos.
+                // Se falhar, o yt-dlp tentará outros automaticamente se não forçarmos.
+                // Removemos o "--extractor-args" para deixar o padrão da biblioteca (que é atualizado pelos mantenedores).
                 
                 request.addOption("--no-check-certificate")
+                
+                // Configuração de formato mais flexível: tenta m4a, se não der, pega o melhor áudio qualquer
                 request.addOption("-f", "bestaudio[ext=m4a]/bestaudio/best")
+                
                 request.addOption("-o", "${tempDir.absolutePath}/%(title)s.%(ext)s")
 
                 runOnUiThread { binding.tvStatus.text = "Baixando..." }
@@ -183,7 +148,7 @@ class MainActivity : AppCompatActivity() {
                         }
                     }
                 } else {
-                    throw Exception("Arquivo não gerado")
+                    throw Exception("O arquivo não foi baixado corretamente.")
                 }
 
             } catch (e: Exception) {
