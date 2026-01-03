@@ -38,21 +38,20 @@ class MainActivity : AppCompatActivity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        // MARCA VISUAL: Se não aparecer isso, o app é velho!
-        binding.tvStatus.text = "Versão Final: Verificando motor..."
+        // Status inicial
+        binding.tvStatus.text = "Conectando ao motor..."
         
-        // Tenta iniciar e atualizar logo de cara
         inicializarEAtualizar()
 
         binding.btnDownload.setOnClickListener {
             val url = binding.etUrl.text.toString().trim()
             if (url.isEmpty()) {
-                Toast.makeText(this, "Cole um link válido", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, "Cole um link primeiro", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
 
             if (!isInitialized) {
-                Toast.makeText(this, "Aguarde a atualização do motor...", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, "Aguarde o sistema ficar pronto...", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
             
@@ -67,29 +66,26 @@ class MainActivity : AppCompatActivity() {
     private fun inicializarEAtualizar() {
         lifecycleScope.launch(Dispatchers.IO) {
             try {
-                // 1. Inicializa o básico
                 YoutubeDL.getInstance().init(applicationContext)
                 
-                // 2. ATUALIZAÇÃO OBRIGATÓRIA (Resolve o erro 403)
                 withContext(Dispatchers.Main) { 
-                    binding.tvStatus.text = "Baixando atualização do motor..." 
+                    binding.tvStatus.text = "Verificando atualizações..." 
                 }
                 
                 try {
-                    // Atualiza para a versão estável mais recente do yt-dlp
                     YoutubeDL.getInstance().updateYoutubeDL(applicationContext, YoutubeDL.UpdateChannel.STABLE)
                 } catch (e: Exception) {
-                    Log.e("Extrator", "Erro ao atualizar (sem internet?)", e)
+                    Log.e("Extrator", "Sem internet para atualizar", e)
                 }
 
                 isInitialized = true
                 val versao = YoutubeDL.getInstance().version(applicationContext)
                 
                 runOnUiThread { 
-                    binding.tvStatus.text = "Motor v$versao Atualizado. Pode baixar." 
+                    binding.tvStatus.text = "Sistema v$versao Pronto." 
                 }
             } catch (e: Exception) {
-                runOnUiThread { binding.tvStatus.text = "Erro Fatal: ${e.message}" }
+                runOnUiThread { binding.tvStatus.text = "Erro: ${e.message}" }
             }
         }
     }
@@ -102,9 +98,16 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+        // UI de carregamento
         binding.progressBar.visibility = View.VISIBLE
+        binding.btnDownload.text = "PROCESSANDO..."
         binding.btnDownload.isEnabled = false
-        binding.tvStatus.text = "Iniciando..."
+        binding.tvStatus.text = "Iniciando download..."
+        
+        // Esconde player antigo
+        binding.cardPlayer.visibility = View.GONE
+        mediaPlayer?.release()
+        mediaPlayer = null
 
         lifecycleScope.launch(Dispatchers.IO) {
             try {
@@ -114,10 +117,6 @@ class MainActivity : AppCompatActivity() {
 
                 val request = YoutubeDLRequest(url)
                 
-                // --- CORREÇÃO FINAL ---
-                // Removi qualquer 'addHeader' ou 'addOption' de cookies.
-                // Confiamos puramente na atualização do motor feita acima.
-
                 val ffmpegLib = File(applicationContext.applicationInfo.nativeLibraryDir, "libffmpeg.so")
                 if (ffmpegLib.exists()) request.addOption("--ffmpeg-location", ffmpegLib.absolutePath)
                 else {
@@ -129,10 +128,10 @@ class MainActivity : AppCompatActivity() {
                 request.addOption("-f", "bestaudio[ext=m4a]/bestaudio/best")
                 request.addOption("-o", "${tempDir.absolutePath}/%(title)s.%(ext)s")
 
-                runOnUiThread { binding.tvStatus.text = "Baixando..." }
-
                 YoutubeDL.getInstance().execute(request) { progress, _, _ ->
-                    runOnUiThread { binding.tvStatus.text = "Baixando: $progress%" }
+                    runOnUiThread { 
+                        binding.tvStatus.text = "Baixando: $progress%" 
+                    }
                 }
 
                 val arquivoBaixado = tempDir.listFiles()?.firstOrNull()
@@ -142,12 +141,16 @@ class MainActivity : AppCompatActivity() {
                     runOnUiThread {
                         if (uri != null) {
                             lastDownloadedUri = uri
-                            binding.tvStatus.text = "Sucesso!"
+                            // Sucesso: Mostra o Player
+                            binding.tvStatus.text = "Download Completo"
                             binding.tvFileName.text = arquivoBaixado.name
+                            binding.tvFileName.isSelected = true // Para o texto correr se for grande
                             binding.cardPlayer.visibility = View.VISIBLE
-                            binding.btnPlay.text = "▶  TOCAR AGORA"
-                            binding.btnPlay.setBackgroundColor(android.graphics.Color.parseColor("#4CAF50"))
-                            mostrarAlerta("Sucesso", "Download concluído!")
+                            
+                            binding.btnDownload.text = "BAIXAR OUTRO"
+                            binding.etUrl.text.clear()
+                            
+                            mostrarAlerta("Sucesso", "Áudio salvo na pasta Downloads!")
                         } else {
                             binding.tvStatus.text = "Erro ao salvar"
                         }
@@ -158,15 +161,42 @@ class MainActivity : AppCompatActivity() {
 
             } catch (e: Exception) {
                 runOnUiThread {
-                    binding.tvStatus.text = "Falha"
-                    mostrarAlerta("Erro Download", e.message ?: "Desconhecido")
+                    binding.tvStatus.text = "Falha no download"
+                    mostrarAlerta("Erro", e.message ?: "Desconhecido")
                 }
             } finally {
                 runOnUiThread {
                     binding.progressBar.visibility = View.GONE
                     binding.btnDownload.isEnabled = true
+                    if (binding.btnDownload.text == "PROCESSANDO...") binding.btnDownload.text = "BAIXAR ÁUDIO"
                 }
             }
+        }
+    }
+
+    private fun controlarPlayer(uri: Uri) {
+        try {
+            if (mediaPlayer == null) {
+                mediaPlayer = MediaPlayer().apply {
+                    setDataSource(applicationContext, uri)
+                    prepare()
+                    start()
+                    setOnCompletionListener {
+                        binding.btnPlay.text = "▶"
+                    }
+                }
+                binding.btnPlay.text = "⏸" // Pause icon
+            } else {
+                if (mediaPlayer!!.isPlaying) {
+                    mediaPlayer!!.pause()
+                    binding.btnPlay.text = "▶"
+                } else {
+                    mediaPlayer!!.start()
+                    binding.btnPlay.text = "⏸"
+                }
+            }
+        } catch (e: Exception) {
+            Toast.makeText(this, "Erro ao tocar", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -187,36 +217,12 @@ class MainActivity : AppCompatActivity() {
         } catch (e: Exception) { null }
     }
 
-    private fun controlarPlayer(uri: Uri) {
-        try {
-            if (mediaPlayer == null) {
-                mediaPlayer = MediaPlayer().apply {
-                    setDataSource(applicationContext, uri)
-                    prepare()
-                    start()
-                    setOnCompletionListener {
-                        binding.btnPlay.text = "▶  TOCAR NOVAMENTE"
-                        binding.btnPlay.setBackgroundColor(android.graphics.Color.parseColor("#4CAF50"))
-                    }
-                }
-                binding.btnPlay.text = "⏸  PAUSAR"
-                binding.btnPlay.setBackgroundColor(android.graphics.Color.parseColor("#E91E63"))
-            } else {
-                if (mediaPlayer!!.isPlaying) {
-                    mediaPlayer!!.pause()
-                    binding.btnPlay.text = "▶  CONTINUAR"
-                    binding.btnPlay.setBackgroundColor(android.graphics.Color.parseColor("#FF9800"))
-                } else {
-                    mediaPlayer!!.start()
-                    binding.btnPlay.text = "⏸  PAUSAR"
-                    binding.btnPlay.setBackgroundColor(android.graphics.Color.parseColor("#E91E63"))
-                }
-            }
-        } catch (e: Exception) { Toast.makeText(this, "Erro player", Toast.LENGTH_SHORT).show() }
-    }
-
     private fun mostrarAlerta(titulo: String, msg: String) {
-        AlertDialog.Builder(this).setTitle(titulo).setMessage(msg).setPositiveButton("OK", null).show()
+        AlertDialog.Builder(this)
+            .setTitle(titulo)
+            .setMessage(msg)
+            .setPositiveButton("OK", null)
+            .show()
     }
     
     override fun onDestroy() {
