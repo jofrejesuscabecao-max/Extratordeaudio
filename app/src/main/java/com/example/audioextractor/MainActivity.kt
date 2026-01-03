@@ -1,7 +1,7 @@
 package com.example.audioextractor
 
 import android.Manifest
-import android.content.ContentValues // <--- O IMPORT QUE FALTAVA
+import android.content.ContentValues
 import android.content.Context
 import android.content.pm.PackageManager
 import android.media.MediaPlayer
@@ -23,7 +23,6 @@ import com.yausername.youtubedl_android.YoutubeDL
 import com.yausername.youtubedl_android.YoutubeDLRequest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileInputStream
 
@@ -46,13 +45,9 @@ class MainActivity : AppCompatActivity() {
                 inicializarSistema()
                 return@setOnClickListener
             }
-
             val url = binding.etUrl.text.toString().trim()
-            if (url.isNotEmpty()) {
-                iniciarDownload(url)
-            } else {
-                Toast.makeText(this, "Cole um link válido", Toast.LENGTH_SHORT).show()
-            }
+            if (url.isNotEmpty()) iniciarDownload(url)
+            else Toast.makeText(this, "Cole um link válido", Toast.LENGTH_SHORT).show()
         }
 
         binding.btnPlay.setOnClickListener {
@@ -61,23 +56,17 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun inicializarSistema() {
-        binding.tvStatus.text = "Configurando motor..."
-        
+        binding.tvStatus.text = "Carregando..."
         lifecycleScope.launch(Dispatchers.IO) {
             try {
                 YoutubeDL.getInstance().init(applicationContext)
                 try { YoutubeDL.getInstance().updateYoutubeDL(applicationContext) } catch (e: Exception) {}
-
                 isInitialized = true
-                
-                runOnUiThread {
-                    binding.tvStatus.text = "Pronto. Cole o link."
-                }
+                runOnUiThread { binding.tvStatus.text = "Pronto." }
             } catch (e: Exception) {
-                Log.e("AudioExtractor", "Erro init", e)
                 runOnUiThread {
-                    binding.tvStatus.text = "Erro no motor."
-                    mostrarAlerta("Falha de Inicialização", "Erro: ${e.message}")
+                    binding.tvStatus.text = "Erro init"
+                    mostrarAlerta("Erro", e.message ?: "Desconhecido")
                 }
             }
         }
@@ -103,41 +92,34 @@ class MainActivity : AppCompatActivity() {
 
                 val request = YoutubeDLRequest(url)
                 
-                // Busca FFmpeg (Correção Manual)
+                // Configuração FFmpeg
                 val ffmpegLib = File(applicationContext.applicationInfo.nativeLibraryDir, "libffmpeg.so")
-                if (ffmpegLib.exists()) {
-                     request.addOption("--ffmpeg-location", ffmpegLib.absolutePath)
-                } else {
-                     val ffmpegFile = File(applicationContext.filesDir, "ffmpeg")
-                     if (ffmpegFile.exists()) {
-                         request.addOption("--ffmpeg-location", ffmpegFile.absolutePath)
-                     }
+                if (ffmpegLib.exists()) request.addOption("--ffmpeg-location", ffmpegLib.absolutePath)
+                else {
+                    val f = File(applicationContext.filesDir, "ffmpeg")
+                    if (f.exists()) request.addOption("--ffmpeg-location", f.absolutePath)
                 }
 
-                // Configurações
-                request.addOption("-x")
-                request.addOption("--audio-format", "m4a")
-                request.addOption("--no-playlist")
+                // --- BYPASS 403 FORBIDDEN ---
+                // Fingimos ser um cliente Android normal (API interna) para evitar verificação de JS
+                request.addOption("--extractor-args", "youtube:player_client=android") 
+                // Força IPv4 (Google bloqueia IPv6 de datacenters/VPNs as vezes)
+                request.addOption("--force-ipv4")
+                // Ignora erros SSL
                 request.addOption("--no-check-certificate")
                 
-                // Argumentos Críticos para Bypass
-                request.addOption("--extractor-args", "youtube:player_client=android,web")
-                request.addOption("--force-ipv4")
-                
-                request.addOption("-f", "bestaudio[ext=m4a]/bestaudio/best")
+                // Formato: Tenta pegar o M4A direto, se não, pega o melhor áudio e converte
+                request.addOption("-f", "bestaudio[ext=m4a]/bestaudio")
                 
                 request.addOption("-o", "${tempDir.absolutePath}/%(title)s.%(ext)s")
-                request.addOption("--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/118.0.0.0 Safari/537.36")
 
                 runOnUiThread { binding.tvStatus.text = "Baixando..." }
 
                 YoutubeDL.getInstance().execute(request) { progress, _, _ ->
-                    runOnUiThread {
-                        binding.tvStatus.text = "Baixando: $progress%"
-                    }
+                    runOnUiThread { binding.tvStatus.text = "Baixando: $progress%" }
                 }
 
-                val arquivoBaixado = tempDir.listFiles()?.firstOrNull { it.extension == "m4a" || it.extension == "mp4" }
+                val arquivoBaixado = tempDir.listFiles()?.firstOrNull()
 
                 if (arquivoBaixado != null) {
                     val uri = salvarDownloads(arquivoBaixado)
@@ -146,20 +128,19 @@ class MainActivity : AppCompatActivity() {
                             lastDownloadedUri = uri
                             binding.tvStatus.text = "Sucesso!"
                             binding.btnPlay.isEnabled = true
-                            mostrarAlerta("Concluído", "Áudio salvo em Downloads!")
+                            mostrarAlerta("Sucesso", "Salvo em Downloads!")
                         } else {
-                            binding.tvStatus.text = "Erro ao salvar."
+                            binding.tvStatus.text = "Erro salvar"
                         }
                     }
                 } else {
-                    throw Exception("O arquivo de áudio não foi gerado.")
+                    throw Exception("Arquivo não gerado")
                 }
 
             } catch (e: Exception) {
-                Log.e("AudioExtractor", "Erro download", e)
                 runOnUiThread {
-                    binding.tvStatus.text = "Falha."
-                    mostrarAlerta("Erro no Download", "Detalhes: ${e.message}")
+                    binding.tvStatus.text = "Falha"
+                    mostrarAlerta("Erro Download", e.message ?: "Desconhecido")
                 }
             } finally {
                 runOnUiThread {
@@ -171,26 +152,20 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun salvarDownloads(arquivo: File): Uri? {
-        // Agora ContentValues vai funcionar porque foi importado
         val valores = ContentValues().apply {
-            put(MediaStore.MediaColumns.DISPLAY_NAME, "Audio_${System.currentTimeMillis()}.m4a")
-            put(MediaStore.MediaColumns.MIME_TYPE, "audio/mp4")
+            put(MediaStore.MediaColumns.DISPLAY_NAME, "Audio_${System.currentTimeMillis()}.${arquivo.extension}")
+            put(MediaStore.MediaColumns.MIME_TYPE, "audio/${arquivo.extension}") // mp4 ou m4a
             put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
         }
         return try {
             val uri = contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, valores)
             uri?.let {
                 contentResolver.openOutputStream(it).use { output ->
-                    FileInputStream(arquivo).use { input ->
-                        input.copyTo(output!!)
-                    }
+                    FileInputStream(arquivo).use { input -> input.copyTo(output!!) }
                 }
             }
             uri
-        } catch (e: Exception) {
-            e.printStackTrace()
-            null
-        }
+        } catch (e: Exception) { null }
     }
 
     private fun tocarAudio(uri: Uri) {
@@ -201,9 +176,7 @@ class MainActivity : AppCompatActivity() {
                 prepare()
                 start()
             }
-        } catch (e: Exception) {
-            Toast.makeText(this, "Erro ao tocar", Toast.LENGTH_SHORT).show()
-        }
+        } catch (e: Exception) { Toast.makeText(this, "Erro play", Toast.LENGTH_SHORT).show() }
     }
 
     private fun mostrarAlerta(titulo: String, msg: String) {
