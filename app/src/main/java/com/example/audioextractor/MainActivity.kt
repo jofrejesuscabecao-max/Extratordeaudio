@@ -103,32 +103,40 @@ class MainActivity : AppCompatActivity() {
 
         lifecycleScope.launch(Dispatchers.IO) {
             try {
-                // Pasta temporária
                 val tempDir = File(cacheDir, "temp_dl")
                 if (!tempDir.exists()) tempDir.mkdirs()
-                
-                // Limpa lixo
                 tempDir.listFiles()?.forEach { it.delete() }
 
                 val request = YoutubeDLRequest(url)
+                
+                // --- CORREÇÃO: DIZER ONDE ESTÁ O FFMPEG ---
+                val ffmpegPath = YoutubeDL.getInstance().ffmpegPath(applicationContext)
+                if (ffmpegPath != null) {
+                    request.addOption("--ffmpeg-location", ffmpegPath)
+                }
+
+                // Configurações Padrão
                 request.addOption("-x") // Extrair áudio
                 request.addOption("--audio-format", "m4a")
                 request.addOption("--no-playlist")
-                request.addOption("-o", "${tempDir.absolutePath}/%(title)s.%(ext)s")
                 
-                // Headers importantes para evitar bloqueio 403
-                request.addOption("--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36")
+                // --- TRUQUES PARA EVITAR ERRO DE JAVASCRIPT ---
+                request.addOption("--no-check-certificate")
+                request.addOption("--prefer-free-formats") 
+                // Evita formatos que exigem login ou javascript pesado
+                request.addOption("--format", "bestaudio[ext=m4a]/bestaudio/best") 
+                
+                request.addOption("-o", "${tempDir.absolutePath}/%(title)s.%(ext)s")
+                request.addOption("--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/118.0.0.0 Safari/537.36")
 
                 runOnUiThread { binding.tvStatus.text = "Baixando... aguarde." }
 
-                // Executa download
                 YoutubeDL.getInstance().execute(request) { progress, _, _ ->
                     runOnUiThread {
                         binding.tvStatus.text = "Baixando: $progress%"
                     }
                 }
 
-                // Busca o arquivo
                 val arquivoBaixado = tempDir.listFiles()?.firstOrNull { it.extension == "m4a" || it.extension == "mp4" }
 
                 if (arquivoBaixado != null) {
