@@ -38,7 +38,6 @@ class MainActivity : AppCompatActivity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        // Status inicial
         binding.tvStatus.text = "Conectando ao motor..."
         
         inicializarEAtualizar()
@@ -98,13 +97,11 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // UI de carregamento
         binding.progressBar.visibility = View.VISIBLE
         binding.btnDownload.text = "PROCESSANDO..."
         binding.btnDownload.isEnabled = false
         binding.tvStatus.text = "Iniciando download..."
         
-        // Esconde player antigo
         binding.cardPlayer.visibility = View.GONE
         mediaPlayer?.release()
         mediaPlayer = null
@@ -141,10 +138,9 @@ class MainActivity : AppCompatActivity() {
                     runOnUiThread {
                         if (uri != null) {
                             lastDownloadedUri = uri
-                            // Sucesso: Mostra o Player
                             binding.tvStatus.text = "Download Completo"
                             binding.tvFileName.text = arquivoBaixado.name
-                            binding.tvFileName.isSelected = true // Para o texto correr se for grande
+                            binding.tvFileName.isSelected = true 
                             binding.cardPlayer.visibility = View.VISIBLE
                             
                             binding.btnDownload.text = "BAIXAR OUTRO"
@@ -185,7 +181,7 @@ class MainActivity : AppCompatActivity() {
                         binding.btnPlay.text = "▶"
                     }
                 }
-                binding.btnPlay.text = "⏸" // Pause icon
+                binding.btnPlay.text = "⏸"
             } else {
                 if (mediaPlayer!!.isPlaying) {
                     mediaPlayer!!.pause()
