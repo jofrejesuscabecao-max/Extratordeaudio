@@ -38,6 +38,9 @@ class MainActivity : AppCompatActivity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
+        // MARCA VISUAL: Se não aparecer isso, o app é velho!
+        binding.tvStatus.text = "Versão Final: Verificando motor..."
+        
         // Tenta iniciar e atualizar logo de cara
         inicializarEAtualizar()
 
@@ -62,29 +65,28 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun inicializarEAtualizar() {
-        binding.tvStatus.text = "Verificando motor..."
         lifecycleScope.launch(Dispatchers.IO) {
             try {
                 // 1. Inicializa o básico
                 YoutubeDL.getInstance().init(applicationContext)
                 
                 // 2. ATUALIZAÇÃO OBRIGATÓRIA (Resolve o erro 403)
-                // Isso conecta no GitHub e baixa a versão do yt-dlp de HOJE.
-                withContext(Dispatchers.Main) { binding.tvStatus.text = "Atualizando definições..." }
+                withContext(Dispatchers.Main) { 
+                    binding.tvStatus.text = "Baixando atualização do motor..." 
+                }
                 
                 try {
-                    // Atualiza para a versão estável mais recente
+                    // Atualiza para a versão estável mais recente do yt-dlp
                     YoutubeDL.getInstance().updateYoutubeDL(applicationContext, YoutubeDL.UpdateChannel.STABLE)
                 } catch (e: Exception) {
                     Log.e("Extrator", "Erro ao atualizar (sem internet?)", e)
                 }
 
                 isInitialized = true
-                // Mostra a versão na tela para confirmar
                 val versao = YoutubeDL.getInstance().version(applicationContext)
                 
                 runOnUiThread { 
-                    binding.tvStatus.text = "Motor v$versao Pronto. Cole o link." 
+                    binding.tvStatus.text = "Motor v$versao Atualizado. Pode baixar." 
                 }
             } catch (e: Exception) {
                 runOnUiThread { binding.tvStatus.text = "Erro Fatal: ${e.message}" }
@@ -93,7 +95,6 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun iniciarDownload(url: String) {
-        // Verifica permissões
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
                 ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.WRITE_EXTERNAL_STORAGE), 100)
@@ -113,9 +114,9 @@ class MainActivity : AppCompatActivity() {
 
                 val request = YoutubeDLRequest(url)
                 
-                // --- CORREÇÃO DO ERRO DE COMPILAÇÃO ---
-                // Removi o 'addHeader' que não existe.
-                // Com o motor atualizado pela função acima, o 403 deve sumir sem precisar de truques.
+                // --- CORREÇÃO FINAL ---
+                // Removi qualquer 'addHeader' ou 'addOption' de cookies.
+                // Confiamos puramente na atualização do motor feita acima.
 
                 val ffmpegLib = File(applicationContext.applicationInfo.nativeLibraryDir, "libffmpeg.so")
                 if (ffmpegLib.exists()) request.addOption("--ffmpeg-location", ffmpegLib.absolutePath)
@@ -124,7 +125,6 @@ class MainActivity : AppCompatActivity() {
                     if (f.exists()) request.addOption("--ffmpeg-location", f.absolutePath)
                 }
 
-                // Configuração Padrão Robusta
                 request.addOption("--no-check-certificate")
                 request.addOption("-f", "bestaudio[ext=m4a]/bestaudio/best")
                 request.addOption("-o", "${tempDir.absolutePath}/%(title)s.%(ext)s")
