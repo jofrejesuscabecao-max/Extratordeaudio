@@ -38,7 +38,8 @@ class MainActivity : AppCompatActivity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        binding.tvStatus.text = "Conectando ao motor..."
+        // Feedback visual inicial
+        binding.tvStatus.text = "Iniciando sistema..."
         
         inicializarEAtualizar()
 
