@@ -1,3 +1,4 @@
+// Arquivo: app/build.gradle.kts
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -13,11 +14,9 @@ android {
         targetSdk = 34
         versionCode = 1
         versionName = "1.0"
-
-        // Isso é crucial para bibliotecas que usam código nativo (C++)
-        ndk {
-            abiFilters.add("arm64-v8a")
-        }
+        
+        // REMOVIDO: ndk { abiFilters... } 
+        // Agora o app vai gerar versões para todos os processadores (arm, x86, etc)
     }
 
     buildTypes {
@@ -47,8 +46,7 @@ dependencies {
     implementation("com.google.android.material:material:1.11.0")
     implementation("androidx.constraintlayout:constraintlayout:2.1.4")
 
-    // --- CORREÇÃO DEFINITIVA ---
-    // Versão 0.15.0 confirmada como existente e estável no repositório JitPack
+    // Versão Estável
     implementation("com.github.yausername.youtubedl-android:library:0.15.0")
     implementation("com.github.yausername.youtubedl-android:ffmpeg:0.15.0")
     
