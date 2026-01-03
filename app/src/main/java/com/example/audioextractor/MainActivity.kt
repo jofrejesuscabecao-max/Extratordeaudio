@@ -2,7 +2,6 @@ package com.example.audioextractor
 
 import android.Manifest
 import android.content.ContentValues
-import android.content.Context
 import android.content.pm.PackageManager
 import android.media.MediaPlayer
 import android.net.Uri
@@ -10,7 +9,6 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Environment
 import android.provider.MediaStore
-import android.util.Log
 import android.view.View
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
@@ -99,15 +97,13 @@ class MainActivity : AppCompatActivity() {
                     if (f.exists()) request.addOption("--ffmpeg-location", f.absolutePath)
                 }
 
-                // --- BYPASS SUPREMO (IOS) ---
-                // Mudamos de 'android' (que exige token) para 'ios' (que geralmente passa direto)
-                request.addOption("--extractor-args", "youtube:player_client=ios")
+                // --- ÚLTIMA TENTATIVA NATIVA ---
+                // 'android_creator' (YouTube Studio) costuma ter menos bloqueios de Token
+                request.addOption("--extractor-args", "youtube:player_client=android_creator")
                 
-                // Força IPv4 (Essencial para evitar bloqueio de IP de servidor)
-                request.addOption("--force-ipv4")
                 request.addOption("--no-check-certificate")
                 
-                // Pede o melhor áudio, mas se falhar, aceita o pior (melhor ter áudio ruim que nenhum)
+                // Pega o melhor áudio disponível
                 request.addOption("-f", "bestaudio[ext=m4a]/bestaudio/best")
                 
                 request.addOption("-o", "${tempDir.absolutePath}/%(title)s.%(ext)s")
@@ -153,7 +149,7 @@ class MainActivity : AppCompatActivity() {
     private fun salvarDownloads(arquivo: File): Uri? {
         val valores = ContentValues().apply {
             put(MediaStore.MediaColumns.DISPLAY_NAME, "Audio_${System.currentTimeMillis()}.${arquivo.extension}")
-            put(MediaStore.MediaColumns.MIME_TYPE, "audio/${arquivo.extension}") 
+            put(MediaStore.MediaColumns.MIME_TYPE, "audio/${arquivo.extension}")
             put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
         }
         return try {
