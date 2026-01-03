@@ -2,10 +2,12 @@
 <resources>
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
-    <!-- Cores do Tema Material -->
+    
+    <!-- Tons de Azul para o Tema -->
     <color name="colorPrimary">#1E88E5</color>
     <color name="colorPrimaryVariant">#0D1B2A</color>
     <color name="colorOnPrimary">#FFFFFF</color>
+    
     <color name="colorSecondary">#415A77</color>
     <color name="colorSecondaryVariant">#1B263B</color>
     <color name="colorOnSecondary">#FFFFFF</color>
