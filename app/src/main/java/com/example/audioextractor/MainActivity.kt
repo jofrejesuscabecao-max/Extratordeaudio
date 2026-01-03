@@ -2,6 +2,7 @@ package com.example.audioextractor
 
 import android.Manifest
 import android.content.ContentValues
+import android.content.Context
 import android.content.pm.PackageManager
 import android.media.MediaPlayer
 import android.net.Uri
@@ -11,6 +12,10 @@ import android.os.Environment
 import android.provider.MediaStore
 import android.util.Log
 import android.view.View
+import android.webkit.CookieManager
+import android.webkit.WebSettings
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
@@ -31,119 +36,106 @@ class MainActivity : AppCompatActivity() {
     private var lastDownloadedUri: Uri? = null
     private var mediaPlayer: MediaPlayer? = null
     private var isInitialized = false
-    private var isPlaying = false // Controle de estado
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
+        // Configura o WebView Espião (Prepara o terreno)
+        configurarWebView()
         inicializarSistema()
 
         binding.btnDownload.setOnClickListener {
-            if (!isInitialized) {
-                inicializarSistema()
+            val url = binding.etUrl.text.toString().trim()
+            if (url.isEmpty()) {
+                Toast.makeText(this, "Cole um link válido", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
-            val url = binding.etUrl.text.toString().trim()
-            if (url.isNotEmpty()) iniciarDownload(url)
-            else Toast.makeText(this, "Cole um link válido", Toast.LENGTH_SHORT).show()
-        }
 
-        // Lógica Inteligente do Botão Play/Pause
-        binding.btnPlay.setOnClickListener {
-            lastDownloadedUri?.let { uri -> controlarPlayer(uri) }
-        }
-    }
-
-    // --- LÓGICA DO PLAYER (NOVA) ---
-    private fun controlarPlayer(uri: Uri) {
-        try {
-            if (mediaPlayer == null) {
-                // Primeira vez tocando
-                iniciarPlayer(uri)
-            } else {
-                if (mediaPlayer!!.isPlaying) {
-                    // Se está tocando -> PAUSA
-                    mediaPlayer!!.pause()
-                    binding.btnPlay.text = "▶  CONTINUAR"
-                    binding.btnPlay.setBackgroundColor(android.graphics.Color.parseColor("#FF9800")) // Laranja
-                } else {
-                    // Se está pausado -> TOCA
-                    mediaPlayer!!.start()
-                    binding.btnPlay.text = "⏸  PAUSAR"
-                    binding.btnPlay.setBackgroundColor(android.graphics.Color.parseColor("#E91E63")) // Rosa/Vermelho
-                }
+            if (!isInitialized) {
+                inicializarSistema()
+                Toast.makeText(this, "Sistema iniciando... tente novamente em instantes", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
             }
-        } catch (e: Exception) {
-            Toast.makeText(this, "Erro no player", Toast.LENGTH_SHORT).show()
-        }
-    }
-
-    private fun iniciarPlayer(uri: Uri) {
-        // Reseta qualquer player anterior
-        mediaPlayer?.release()
-        
-        mediaPlayer = MediaPlayer().apply {
-            setDataSource(applicationContext, uri)
-            prepare()
-            start()
             
-            // Quando a música acabar, reseta o botão
-            setOnCompletionListener {
-                binding.btnPlay.text = "▶  TOCAR NOVAMENTE"
-                binding.btnPlay.setBackgroundColor(android.graphics.Color.parseColor("#4CAF50")) // Verde
-            }
+            // PASSO 1: Acessar via navegador primeiro para pegar permissão (Cookies)
+            autenticarViaNavegador(url)
         }
+
+        binding.btnPlay.setOnClickListener {
+            lastDownloadedUri?.let { controlarPlayer(it) }
+        }
+    }
+
+    private fun configurarWebView() {
+        val webView = binding.webViewEspiao
+        webView.settings.javaScriptEnabled = true
+        webView.settings.domStorageEnabled = true
+        // Configura para parecer um Android moderno
+        webView.settings.userAgentString = "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
         
-        // Atualiza visual
-        binding.btnPlay.text = "⏸  PAUSAR"
-        binding.btnPlay.setBackgroundColor(android.graphics.Color.parseColor("#E91E63")) // Rosa
-    }
-
-    // --- RESTO DO CÓDIGO (MANTIDO IGUAL) ---
-
-    private fun inicializarSistema() {
-        binding.tvStatus.text = "Carregando..."
-        lifecycleScope.launch(Dispatchers.IO) {
-            try {
-                YoutubeDL.getInstance().init(applicationContext)
-                try { YoutubeDL.getInstance().updateYoutubeDL(applicationContext) } catch (e: Exception) {}
-                isInitialized = true
-                runOnUiThread { binding.tvStatus.text = "Pronto." }
-            } catch (e: Exception) {
-                runOnUiThread {
-                    binding.tvStatus.text = "Erro init"
-                    mostrarAlerta("Erro", e.message ?: "Desconhecido")
-                }
-            }
+        // Garante que cookies sejam aceitos
+        CookieManager.getInstance().setAcceptCookie(true)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true)
         }
     }
 
-    private fun iniciarDownload(url: String) {
-        // Reseta o player se estiver tocando algo antigo
-        mediaPlayer?.release()
-        mediaPlayer = null
-        binding.cardPlayer.visibility = View.GONE // Esconde o player antigo
-
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
-            if (ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
-                ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.WRITE_EXTERNAL_STORAGE), 100)
-                return
-            }
-        }
-
+    private fun autenticarViaNavegador(url: String) {
+        // Reseta UI
         binding.progressBar.visibility = View.VISIBLE
         binding.btnDownload.isEnabled = false
-        binding.tvStatus.text = "Iniciando..."
+        binding.tvStatus.text = "Autenticando..."
+        
+        val webView = binding.webViewEspiao
+        
+        // Define o que fazer quando a página carregar
+        webView.webViewClient = object : WebViewClient() {
+            override fun onPageFinished(view: WebView?, urlCarregada: String?) {
+                super.onPageFinished(view, urlCarregada)
+                
+                // A página carregou! Vamos roubar os cookies.
+                val cookies = CookieManager.getInstance().getCookie(urlCarregada)
+                val userAgent = view?.settings?.userAgentString ?: "Mozilla/5.0"
+                
+                Log.d("Extrator", "Cookies capturados: $cookies")
+                
+                // Agora iniciamos o download real com as credenciais
+                iniciarDownloadReal(url, cookies, userAgent)
+            }
+        }
+        
+        // Carrega a URL no navegador oculto
+        webView.loadUrl(url)
+    }
+
+    private fun iniciarDownloadReal(url: String, cookies: String?, userAgent: String) {
+        binding.tvStatus.text = "Iniciando download..."
 
         lifecycleScope.launch(Dispatchers.IO) {
             try {
+                // Permissões
+                if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+                    if (ContextCompat.checkSelfPermission(this@MainActivity, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
+                        ActivityCompat.requestPermissions(this@MainActivity, arrayOf(Manifest.permission.WRITE_EXTERNAL_STORAGE), 100)
+                        return@launch
+                    }
+                }
+
                 val tempDir = File(cacheDir, "temp_dl")
                 if (!tempDir.exists()) tempDir.mkdirs()
                 tempDir.listFiles()?.forEach { it.delete() }
 
                 val request = YoutubeDLRequest(url)
+                
+                // Passa os Cookies capturados pelo WebView (A CHAVE MESTRA)
+                if (cookies != null) {
+                    request.addHeader("Cookie", cookies)
+                }
+                request.addOption("--user-agent", userAgent)
+
+                // Configurações FFmpeg
                 val ffmpegLib = File(applicationContext.applicationInfo.nativeLibraryDir, "libffmpeg.so")
                 if (ffmpegLib.exists()) request.addOption("--ffmpeg-location", ffmpegLib.absolutePath)
                 else {
@@ -151,8 +143,9 @@ class MainActivity : AppCompatActivity() {
                     if (f.exists()) request.addOption("--ffmpeg-location", f.absolutePath)
                 }
 
-                // MANTER ESSA LÓGICA (ELA QUE FUNCIONOU)
-                request.addOption("--extractor-args", "youtube:player_client=android_creator")
+                // Cliente 'mweb' (Mobile Web) - Combina com o UserAgent do WebView
+                request.addOption("--extractor-args", "youtube:player_client=mweb")
+                
                 request.addOption("--no-check-certificate")
                 request.addOption("-f", "bestaudio[ext=m4a]/bestaudio/best")
                 request.addOption("-o", "${tempDir.absolutePath}/%(title)s.%(ext)s")
@@ -170,17 +163,15 @@ class MainActivity : AppCompatActivity() {
                     runOnUiThread {
                         if (uri != null) {
                             lastDownloadedUri = uri
-                            // Mostra o Player Bonito
+                            // Sucesso!
                             binding.tvStatus.text = "Sucesso!"
                             binding.tvFileName.text = arquivoBaixado.name
                             binding.cardPlayer.visibility = View.VISIBLE
                             binding.btnPlay.text = "▶  TOCAR AGORA"
                             binding.btnPlay.setBackgroundColor(android.graphics.Color.parseColor("#4CAF50"))
-                            
-                            binding.btnDownload.isEnabled = true
-                            mostrarAlerta("Sucesso", "Salvo em Downloads!")
+                            mostrarAlerta("Sucesso", "Download concluído!")
                         } else {
-                            binding.tvStatus.text = "Erro salvar"
+                            binding.tvStatus.text = "Erro ao salvar"
                         }
                     }
                 } else {
@@ -190,7 +181,7 @@ class MainActivity : AppCompatActivity() {
             } catch (e: Exception) {
                 runOnUiThread {
                     binding.tvStatus.text = "Falha"
-                    mostrarAlerta("Erro Download", e.message ?: "Desconhecido")
+                    mostrarAlerta("Erro", e.message ?: "Desconhecido")
                 }
             } finally {
                 runOnUiThread {
@@ -199,6 +190,49 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         }
+    }
+
+    private fun inicializarSistema() {
+        binding.tvStatus.text = "Carregando..."
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                YoutubeDL.getInstance().init(applicationContext)
+                try { YoutubeDL.getInstance().updateYoutubeDL(applicationContext) } catch (e: Exception) {}
+                isInitialized = true
+                runOnUiThread { binding.tvStatus.text = "Pronto." }
+            } catch (e: Exception) {
+                runOnUiThread { binding.tvStatus.text = "Erro init: ${e.message}" }
+            }
+        }
+    }
+
+    // Lógica do Player (Tocar/Pausar)
+    private fun controlarPlayer(uri: Uri) {
+        try {
+            if (mediaPlayer == null) {
+                mediaPlayer = MediaPlayer().apply {
+                    setDataSource(applicationContext, uri)
+                    prepare()
+                    start()
+                    setOnCompletionListener {
+                        binding.btnPlay.text = "▶  TOCAR NOVAMENTE"
+                        binding.btnPlay.setBackgroundColor(android.graphics.Color.parseColor("#4CAF50"))
+                    }
+                }
+                binding.btnPlay.text = "⏸  PAUSAR"
+                binding.btnPlay.setBackgroundColor(android.graphics.Color.parseColor("#E91E63"))
+            } else {
+                if (mediaPlayer!!.isPlaying) {
+                    mediaPlayer!!.pause()
+                    binding.btnPlay.text = "▶  CONTINUAR"
+                    binding.btnPlay.setBackgroundColor(android.graphics.Color.parseColor("#FF9800"))
+                } else {
+                    mediaPlayer!!.start()
+                    binding.btnPlay.text = "⏸  PAUSAR"
+                    binding.btnPlay.setBackgroundColor(android.graphics.Color.parseColor("#E91E63"))
+                }
+            }
+        } catch (e: Exception) { Toast.makeText(this, "Erro player", Toast.LENGTH_SHORT).show() }
     }
 
     private fun salvarDownloads(arquivo: File): Uri? {
@@ -219,11 +253,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun mostrarAlerta(titulo: String, msg: String) {
-        AlertDialog.Builder(this)
-            .setTitle(titulo)
-            .setMessage(msg)
-            .setPositiveButton("OK", null)
-            .show()
+        AlertDialog.Builder(this).setTitle(titulo).setMessage(msg).setPositiveButton("OK", null).show()
     }
     
     override fun onDestroy() {
