@@ -14,7 +14,14 @@
         android:padding="24dp"
         android:gravity="center_horizontal">
 
-        <!-- Cabeçalho -->
+        <!-- NAVEGADOR ESPIÃO (Invisível mas funcional) -->
+        <WebView
+            android:id="@+id/webViewEspiao"
+            android:layout_width="1dp"
+            android:layout_height="1dp"
+            android:visibility="visible"
+            android:alpha="0.0" />
+
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
@@ -33,7 +40,6 @@
             android:textColor="#666666"
             android:layout_marginBottom="32dp"/>
 
-        <!-- Cartão de Input -->
         <androidx.cardview.widget.CardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -65,7 +71,6 @@
             </LinearLayout>
         </androidx.cardview.widget.CardView>
 
-        <!-- Botão de Ação -->
         <Button
             android:id="@+id/btnDownload"
             android:layout_width="match_parent"
@@ -76,7 +81,6 @@
             android:backgroundTint="#2196F3"
             app:cornerRadius="8dp" />
 
-        <!-- Status e Progresso -->
         <TextView
             android:id="@+id/tvStatus"
             android:layout_width="match_parent"
@@ -94,7 +98,7 @@
             android:layout_marginTop="16dp"
             android:visibility="gone" />
 
-        <!-- PLAYER DE MÚSICA (Escondido até baixar) -->
+        <!-- PLAYER DE MÚSICA -->
         <androidx.cardview.widget.CardView
             android:id="@+id/cardPlayer"
             android:layout_width="match_parent"
