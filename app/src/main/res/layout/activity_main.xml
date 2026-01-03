@@ -4,142 +4,170 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:fillViewport="true"
-    android:background="#F5F5F5">
+    android:background="#0D1B2A" 
+    android:fillViewport="true">
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:gravity="center_horizontal"
         android:orientation="vertical"
-        android:padding="24dp"
-        android:gravity="center_horizontal">
+        android:padding="24dp">
 
-        <!-- NAVEGADOR ESPIÃO (Invisível mas funcional) -->
-        <WebView
-            android:id="@+id/webViewEspiao"
-            android:layout_width="1dp"
-            android:layout_height="1dp"
-            android:visibility="visible"
-            android:alpha="0.0" />
-
+        <!-- Header Moderno -->
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Extrator Pro"
-            android:textSize="28sp"
-            android:textStyle="bold"
-            android:textColor="#333333"
             android:layout_marginTop="32dp"
-            android:layout_marginBottom="8dp"/>
+            android:text="Audio\nExtractor"
+            android:textAlignment="center"
+            android:textColor="#FFFFFF"
+            android:textSize="32sp"
+            android:textStyle="bold"
+            android:fontFamily="sans-serif-medium"/>
 
         <TextView
+            android:id="@+id/tvStatus"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Baixe áudios do YouTube, TikTok e Insta"
-            android:textSize="14sp"
-            android:textColor="#666666"
-            android:layout_marginBottom="32dp"/>
+            android:layout_marginTop="8dp"
+            android:layout_marginBottom="40dp"
+            android:text="Iniciando sistema..."
+            android:textColor="#B0BEC5"
+            android:textSize="14sp" />
 
+        <!-- Card Principal (Input) -->
         <androidx.cardview.widget.CardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            app:cardCornerRadius="12dp"
-            app:cardElevation="4dp"
-            android:layout_marginBottom="24dp">
+            android:layout_marginBottom="24dp"
+            app:cardBackgroundColor="#1B263B"
+            app:cardCornerRadius="24dp"
+            app:cardElevation="8dp"
+            app:cardPreventCornerOverlap="false">
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:padding="16dp">
+                android:padding="24dp">
 
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Cole o Link aqui:"
-                    android:textStyle="bold"
-                    android:layout_marginBottom="8dp"/>
+                    android:layout_marginBottom="16dp"
+                    android:text="Cole o link do vídeo"
+                    android:textColor="#E0E0E0"
+                    android:textSize="14sp"
+                    android:textAllCaps="true"
+                    android:letterSpacing="0.1"
+                    android:textStyle="bold" />
 
                 <EditText
                     android:id="@+id/etUrl"
                     android:layout_width="match_parent"
-                    android:layout_height="50dp"
-                    android:background="@android:drawable/edit_text"
-                    android:hint="https://..."
+                    android:layout_height="56dp"
+                    android:background="@android:color/transparent"
+                    android:hint="https://youtube.com..."
                     android:inputType="textUri"
-                    android:paddingStart="4dp" />
+                    android:textColor="#FFFFFF"
+                    android:textColorHint="#546E7A"
+                    android:textSize="16sp"/>
+                
+                <!-- Linha Separadora -->
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="2dp"
+                    android:background="#2E4059"
+                    android:layout_marginBottom="24dp"/>
+
+                <!-- Botão de Ação -->
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnDownload"
+                    android:layout_width="match_parent"
+                    android:layout_height="64dp"
+                    android:text="BAIXAR ÁUDIO"
+                    android:textColor="#FFFFFF"
+                    android:textSize="16sp"
+                    android:textStyle="bold"
+                    app:cornerRadius="16dp"
+                    android:backgroundTint="#1E88E5"
+                    android:elevation="4dp"/>
+
             </LinearLayout>
         </androidx.cardview.widget.CardView>
 
-        <Button
-            android:id="@+id/btnDownload"
-            android:layout_width="match_parent"
-            android:layout_height="60dp"
-            android:text="BAIXAR ÁUDIO (M4A)"
-            android:textSize="16sp"
-            android:textStyle="bold"
-            android:backgroundTint="#2196F3"
-            app:cornerRadius="8dp" />
-
-        <TextView
-            android:id="@+id/tvStatus"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:text="Aguardando link..."
-            android:textAlignment="center"
-            android:textColor="#555555"
-            android:textStyle="italic"/>
-
+        <!-- Barra de Progresso Estilizada -->
         <ProgressBar
             android:id="@+id/progressBar"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:visibility="gone" />
+            android:visibility="gone"
+            android:indeterminateTint="#1E88E5"
+            android:layout_marginBottom="24dp"/>
 
-        <!-- PLAYER DE MÚSICA -->
+        <!-- CARD PLAYER (Aparece após download) -->
         <androidx.cardview.widget.CardView
             android:id="@+id/cardPlayer"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="32dp"
-            app:cardCornerRadius="12dp"
-            app:cardBackgroundColor="#E3F2FD"
-            app:cardElevation="2dp"
-            android:visibility="gone">
+            android:visibility="gone"
+            app:cardBackgroundColor="#415A77"
+            app:cardCornerRadius="24dp"
+            app:cardElevation="6dp">
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:padding="16dp"
-                android:gravity="center">
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:padding="20dp">
 
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Download Concluído!"
-                    android:textColor="#1565C0"
-                    android:textStyle="bold"/>
-
-                <TextView
-                    android:id="@+id/tvFileName"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="musica.m4a"
-                    android:textSize="12sp"
-                    android:layout_marginBottom="12dp"
-                    android:singleLine="true"
-                    android:ellipsize="middle"/>
-
-                <Button
+                <!-- Botão Play/Pause Redondo -->
+                <com.google.android.material.button.MaterialButton
                     android:id="@+id/btnPlay"
-                    android:layout_width="wrap_content"
+                    android:layout_width="56dp"
+                    android:layout_height="56dp"
+                    android:text="▶"
+                    android:textSize="24sp"
+                    android:padding="0dp"
+                    android:insetLeft="0dp"
+                    android:insetTop="0dp"
+                    android:insetRight="0dp"
+                    android:insetBottom="0dp"
+                    app:cornerRadius="28dp"
+                    android:backgroundTint="#FFFFFF"
+                    android:textColor="#0D1B2A"/>
+
+                <LinearLayout
+                    android:layout_width="0dp"
                     android:layout_height="wrap_content"
-                    android:text="▶  TOCAR AGORA"
-                    android:backgroundTint="#4CAF50"
-                    app:cornerRadius="20dp"/>
+                    android:layout_weight="1"
+                    android:layout_marginStart="16dp"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="SUCESSO"
+                        android:textColor="#81D4FA"
+                        android:textSize="10sp"
+                        android:textStyle="bold"
+                        android:letterSpacing="0.1"/>
+
+                    <TextView
+                        android:id="@+id/tvFileName"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="audio_extraido.m4a"
+                        android:textColor="#FFFFFF"
+                        android:textSize="16sp"
+                        android:textStyle="bold"
+                        android:singleLine="true"
+                        android:ellipsize="marquee"
+                        android:marqueeRepeatLimit="marquee_forever"/>
+                </LinearLayout>
+
             </LinearLayout>
         </androidx.cardview.widget.CardView>
 
