@@ -11,10 +11,7 @@
         android:icon="@drawable/ic_launcher"
         android:label="Extrator Pro"
         android:supportsRtl="true"
-        
-        <!-- AQUI ESTAVA O ERRO. MUDAMOS PARA MATERIAL COMPONENTS -->
         android:theme="@style/Theme.MaterialComponents.Light.NoActionBar"
-        
         tools:targetApi="31">
         
         <activity
