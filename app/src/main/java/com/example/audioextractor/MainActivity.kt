@@ -41,12 +41,13 @@ class MainActivity : AppCompatActivity() {
         inicializarBiblioteca()
 
         binding.btnDownload.setOnClickListener {
+            // Verificação de Segurança
             if (!isLibInitialized) {
                 mostrarErro("Aguarde", "O sistema ainda está iniciando. Tente em 5 segundos.")
                 return@setOnClickListener
             }
 
-            // Verifica permissão para Android antigo
+            // Permissões para Android 9 ou inferior
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
                 if (ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
                     ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.WRITE_EXTERNAL_STORAGE), 100)
@@ -71,8 +72,15 @@ class MainActivity : AppCompatActivity() {
         binding.tvStatus.text = "Iniciando sistema..."
         lifecycleScope.launch(Dispatchers.IO) {
             try {
+                // Tenta inicializar. Se falhar, captura o erro.
                 YoutubeDL.getInstance().init(applicationContext)
-                YoutubeDL.getInstance().updateYoutubeDL(applicationContext) // Tenta atualizar as definições
+                // Atualização automática das definições (importante para sites que mudam muito)
+                try {
+                    YoutubeDL.getInstance().updateYoutubeDL(applicationContext)
+                } catch (e: Exception) {
+                    // Se falhar a atualização (sem internet), segue com a versão embarcada
+                }
+                
                 isLibInitialized = true
                 withContext(Dispatchers.Main) {
                     binding.tvStatus.text = "Pronto para baixar."
@@ -80,7 +88,7 @@ class MainActivity : AppCompatActivity() {
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) {
                     binding.tvStatus.text = "Erro na inicialização."
-                    mostrarErro("Erro Crítico", "Não foi possível iniciar o motor de download: ${e.message}")
+                    mostrarErro("Erro Crítico", "Não foi possível iniciar o motor de download.\n\nMotivo: ${e.message}")
                 }
             }
         }
@@ -96,28 +104,25 @@ class MainActivity : AppCompatActivity() {
                 val tempDir = File(cacheDir, "temp_downloads")
                 if (!tempDir.exists()) tempDir.mkdirs()
                 
-                // Limpa lixo anterior
+                // Limpa arquivos anteriores
                 tempDir.listFiles()?.forEach { it.delete() }
 
-                // Configuração agressiva para compatibilidade
                 val request = YoutubeDLRequest(url)
                 request.addOption("-x") // Extrair áudio
                 request.addOption("--audio-format", "m4a")
                 request.addOption("--no-playlist")
                 request.addOption("--no-check-certificate") // Ignora erros de SSL
                 request.addOption("-o", "${tempDir.absolutePath}/%(title)s.%(ext)s")
-                
-                // Headers para simular navegador de PC
-                request.addOption("--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
+                request.addOption("--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/91.0.4472.124")
 
                 withContext(Dispatchers.Main) { binding.tvStatus.text = "Baixando áudio..." }
                 
-                // Executa o download
-                YoutubeDL.getInstance().execute(request) { progress, _, _ ->
-                     // Opcional: Log de progresso
+                // Executa
+                YoutubeDL.getInstance().execute(request) { progress, _, _ -> 
+                    // Progresso
                 }
 
-                // Encontra o arquivo
+                // Procura o arquivo gerado
                 val downloadedFile = tempDir.listFiles()
                     ?.filter { it.extension == "m4a" || it.extension == "mp4" || it.extension == "webm" }
                     ?.maxByOrNull { it.lastModified() }
@@ -133,18 +138,18 @@ class MainActivity : AppCompatActivity() {
                             binding.etUrl.text?.clear()
                             mostrarSucesso("Download Concluído", "Salvo na pasta Downloads.")
                         } else {
-                            mostrarErro("Erro ao Salvar", "O arquivo foi baixado mas falhou ao mover para a galeria.")
+                            mostrarErro("Erro ao Salvar", "O arquivo baixou mas não consegui mover para a Galeria.")
                         }
                     }
                 } else {
-                    throw Exception("O download parece ter funcionado, mas nenhum arquivo de áudio foi gerado.")
+                    throw Exception("O download finalizou mas o arquivo de áudio não foi encontrado.")
                 }
 
             } catch (e: Exception) {
                 e.printStackTrace()
                 withContext(Dispatchers.Main) {
                     binding.tvStatus.text = "Falha."
-                    mostrarErro("Falha no Download", "Erro: ${e.message}\n\nTente outro link.")
+                    mostrarErro("Falha no Download", "Ocorreu um erro:\n${e.message}\n\nTente outro link.")
                 }
             } finally {
                 withContext(Dispatchers.Main) {
@@ -158,7 +163,7 @@ class MainActivity : AppCompatActivity() {
     private fun moveFileToDownloads(tempFile: File): Uri? {
         val resolver = contentResolver
         val contentValues = ContentValues().apply {
-            put(MediaStore.MediaColumns.DISPLAY_NAME, "Audio_${System.currentTimeMillis()}.m4a") // Nome único
+            put(MediaStore.MediaColumns.DISPLAY_NAME, "Audio_${System.currentTimeMillis()}.m4a")
             put(MediaStore.MediaColumns.MIME_TYPE, "audio/mp4")
             put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
         }
@@ -176,7 +181,6 @@ class MainActivity : AppCompatActivity() {
                 null
             }
         } catch (e: Exception) {
-            e.printStackTrace()
             null
         }
     }
