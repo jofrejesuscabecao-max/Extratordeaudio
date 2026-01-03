@@ -1,6 +1,3 @@
-// Arquivo: app/build.gradle.kts
-// Configurações do módulo do app e dependências do yt-dlp
-
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -12,13 +9,11 @@ android {
 
     defaultConfig {
         applicationId = "com.example.audioextractor"
-        minSdk = 24 // Android 7.0 (Necessário para algumas libs modernas)
+        minSdk = 24 
         targetSdk = 34
         versionCode = 1
         versionName = "1.0"
 
-        // Importante: Força o uso da arquitetura mais comum de celulares modernos
-        // para evitar erros de split/abi no emulador ou build.
         ndk {
             abiFilters.add("arm64-v8a")
         }
@@ -40,7 +35,6 @@ android {
         jvmTarget = "1.8"
     }
 
-    // Habilita ViewBinding para facilitar o código da UI
     buildFeatures {
         viewBinding = true
     }
@@ -52,13 +46,12 @@ dependencies {
     implementation("com.google.android.material:material:1.11.0")
     implementation("androidx.constraintlayout:constraintlayout:2.1.4")
 
-    // --- O CORAÇÃO DO EXTRATOR ---
-    // Biblioteca wrapper do yt-dlp
-    implementation("com.github.ya-username.youtubedl-android:library:0.16.0")
-    // Biblioteca FFmpeg (essencial para converter/extrair áudio)
-    implementation("com.github.ya-username.youtubedl-android:ffmpeg:0.16.0")
+    // --- CORREÇÃO AQUI ---
+    // Versão alterada para 0.14.6 (Estável e Existente)
+    implementation("com.github.ya-username.youtubedl-android:library:0.14.6")
+    implementation("com.github.ya-username.youtubedl-android:ffmpeg:0.14.6")
     
-    // Coroutines para não travar a UI
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
 }
+
 
