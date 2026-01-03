@@ -1,7 +1,6 @@
 package com.example.audioextractor
 
 import android.Manifest
-import android.content.ContentValues
 import android.content.Context
 import android.content.pm.PackageManager
 import android.media.MediaPlayer
@@ -39,7 +38,6 @@ class MainActivity : AppCompatActivity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        // Inicia o sistema
         inicializarSistema()
 
         binding.btnDownload.setOnClickListener {
@@ -66,10 +64,10 @@ class MainActivity : AppCompatActivity() {
         
         lifecycleScope.launch(Dispatchers.IO) {
             try {
-                // Inicializa a biblioteca (extrai os arquivos)
+                // Inicializa a biblioteca e extrai os binários
                 YoutubeDL.getInstance().init(applicationContext)
                 
-                // Tenta atualizar (opcional)
+                // Tenta atualizar se possível
                 try { YoutubeDL.getInstance().updateYoutubeDL(applicationContext) } catch (e: Exception) {}
 
                 isInitialized = true
@@ -81,8 +79,7 @@ class MainActivity : AppCompatActivity() {
                 Log.e("AudioExtractor", "Erro init", e)
                 runOnUiThread {
                     binding.tvStatus.text = "Erro no motor."
-                    mostrarAlerta("Falha de Inicialização", 
-                        "O aplicativo não conseguiu preparar os arquivos.\n\nErro: ${e.message}")
+                    mostrarAlerta("Falha de Inicialização", "Erro: ${e.message}")
                 }
             }
         }
@@ -108,28 +105,36 @@ class MainActivity : AppCompatActivity() {
 
                 val request = YoutubeDLRequest(url)
                 
-                // --- CORREÇÃO SEGURA: BUSCA MANUAL DO FFMPEG ---
-                // Não usamos mais a função privada. Nós mesmos achamos o arquivo.
-                val ffmpegFile = encontrarFfmpeg(applicationContext)
-                if (ffmpegFile != null) {
-                    // Passa o caminho exato para o comando
-                    request.addOption("--ffmpeg-location", ffmpegFile.absolutePath)
+                // --- ESTRATÉGIA FFMPEG ---
+                // Tenta localizar o binário do ffmpeg que a biblioteca extraiu
+                val ffmpegLib = File(applicationContext.applicationInfo.nativeLibraryDir, "libffmpeg.so")
+                if (ffmpegLib.exists()) {
+                     request.addOption("--ffmpeg-location", ffmpegLib.absolutePath)
+                } else {
+                     // Tenta buscar na pasta de arquivos se não estiver na lib nativa
+                     val ffmpegFile = File(applicationContext.filesDir, "ffmpeg")
+                     if (ffmpegFile.exists()) {
+                         request.addOption("--ffmpeg-location", ffmpegFile.absolutePath)
+                     }
                 }
 
-                // Opções para evitar erros de JavaScript e Formato
+                // --- CONFIGURAÇÕES BYPASS ---
                 request.addOption("-x")
                 request.addOption("--audio-format", "m4a")
                 request.addOption("--no-playlist")
                 request.addOption("--no-check-certificate")
-                // Força usar apenas ipv4 para evitar bloqueios do Google
+                
+                // Opções críticas para pular verificações de JS
+                request.addOption("--extractor-args", "youtube:player_client=android,web")
                 request.addOption("--force-ipv4")
-                // Tenta extrair o melhor áudio disponível
+                
+                // Tenta baixar o melhor áudio disponível diretamente
                 request.addOption("-f", "bestaudio[ext=m4a]/bestaudio/best")
                 
                 request.addOption("-o", "${tempDir.absolutePath}/%(title)s.%(ext)s")
                 request.addOption("--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/118.0.0.0 Safari/537.36")
 
-                runOnUiThread { binding.tvStatus.text = "Baixando... aguarde." }
+                runOnUiThread { binding.tvStatus.text = "Baixando..." }
 
                 YoutubeDL.getInstance().execute(request) { progress, _, _ ->
                     runOnUiThread {
@@ -144,15 +149,15 @@ class MainActivity : AppCompatActivity() {
                     runOnUiThread {
                         if (uri != null) {
                             lastDownloadedUri = uri
-                            binding.tvStatus.text = "Sucesso! Salvo em Downloads."
+                            binding.tvStatus.text = "Sucesso!"
                             binding.btnPlay.isEnabled = true
-                            mostrarAlerta("Concluído", "Áudio salvo com sucesso!")
+                            mostrarAlerta("Concluído", "Áudio salvo em Downloads!")
                         } else {
                             binding.tvStatus.text = "Erro ao salvar."
                         }
                     }
                 } else {
-                    throw Exception("O arquivo não foi encontrado após o processo.")
+                    throw Exception("O arquivo de áudio não foi gerado.")
                 }
 
             } catch (e: Exception) {
@@ -170,37 +175,12 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // --- FUNÇÃO "CAÇA-ARQUIVO" ---
-    // Varre as pastas internas do app procurando onde o ffmpeg se escondeu
-    private fun encontrarFfmpeg(context: Context): File? {
-        try {
-            // Locais comuns onde a biblioteca descompacta os arquivos
-            val locaisPossiveis = listOf(
-                File(context.applicationInfo.nativeLibraryDir, "libffmpeg.so"),
-                File(context.noBackupFilesDir, "youtubedl-android/ffmpeg"),
-                File(context.noBackupFilesDir, "ffmpeg"),
-                File(context.filesDir, "ffmpeg")
-            )
-
-            // Tenta achar um que exista
-            for (arquivo in locaisPossiveis) {
-                if (arquivo.exists()) return arquivo
-            }
-            
-            // Busca recursiva se não achar nos locais padrão
-            return context.noBackupFilesDir.walkTopDown().find { it.name.contains("ffmpeg") }
-        } catch (e: Exception) {
-            return null
-        }
-    }
-
     private fun salvarDownloads(arquivo: File): Uri? {
         val valores = ContentValues().apply {
             put(MediaStore.MediaColumns.DISPLAY_NAME, "Audio_${System.currentTimeMillis()}.m4a")
             put(MediaStore.MediaColumns.MIME_TYPE, "audio/mp4")
             put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
         }
-
         return try {
             val uri = contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, valores)
             uri?.let {
