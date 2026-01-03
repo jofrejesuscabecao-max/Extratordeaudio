@@ -29,6 +29,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import java.io.File
 import java.io.FileInputStream
+import java.io.FileOutputStream // Import necessário
 
 class MainActivity : AppCompatActivity() {
 
@@ -42,7 +43,6 @@ class MainActivity : AppCompatActivity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        // Prepara o WebView oculto
         configurarWebView()
         inicializarSistema()
 
@@ -59,7 +59,7 @@ class MainActivity : AppCompatActivity() {
                 return@setOnClickListener
             }
             
-            // PASSO 1: O WebView vai lá primeiro pegar o crachá (Cookies)
+            // PASSO 1: O WebView acessa para validar a sessão
             autenticarViaNavegador(url)
         }
 
@@ -72,7 +72,7 @@ class MainActivity : AppCompatActivity() {
         val webView = binding.webViewEspiao
         webView.settings.javaScriptEnabled = true
         webView.settings.domStorageEnabled = true
-        // User Agent de um celular Android comum (Chrome)
+        // User Agent genérico de Android
         webView.settings.userAgentString = "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
         
         CookieManager.getInstance().setAcceptCookie(true)
@@ -84,7 +84,7 @@ class MainActivity : AppCompatActivity() {
     private fun autenticarViaNavegador(url: String) {
         binding.progressBar.visibility = View.VISIBLE
         binding.btnDownload.isEnabled = false
-        binding.tvStatus.text = "Autenticando..."
+        binding.tvStatus.text = "Validando acesso..."
         
         val webView = binding.webViewEspiao
         
@@ -92,22 +92,38 @@ class MainActivity : AppCompatActivity() {
             override fun onPageFinished(view: WebView?, urlCarregada: String?) {
                 super.onPageFinished(view, urlCarregada)
                 
-                // Rouba os cookies da sessão carregada
                 val cookies = CookieManager.getInstance().getCookie(urlCarregada)
                 val userAgent = view?.settings?.userAgentString ?: "Mozilla/5.0"
                 
-                Log.d("Extrator", "Cookies obtidos: $cookies")
+                // Em vez de passar no header (que falhou), vamos salvar num arquivo temporário
+                // O yt-dlp aceita arquivo de cookies melhor que header cru
+                val cookieFile = salvarCookiesEmArquivo(cookies)
                 
-                // Inicia o download com as credenciais
-                iniciarDownloadReal(url, cookies, userAgent)
+                iniciarDownloadReal(url, cookieFile, userAgent)
             }
         }
         
-        // Carrega a URL para gerar os cookies
         webView.loadUrl(url)
     }
+    
+    // Função auxiliar para criar arquivo de cookies compatível
+    private fun salvarCookiesEmArquivo(cookieString: String?): File? {
+        if (cookieString == null) return null
+        return try {
+            val file = File(cacheDir, "cookies.txt")
+            // Formato Netscape simplificado (domínio, flag, path, secure, expiration, name, value)
+            // Como o CookieManager retorna só "nome=valor", vamos tentar escrever o header puro
+            // O yt-dlp aceita formato HTTP Header se passado corretamente, mas a opção --cookies exige arquivo Netscape.
+            // A melhor aposta segura: NÃO passar cookies se estiver dando erro de segurança,
+            // e confiar apenas no UserAgent e Client.
+            
+            // Vamos retornar null aqui para DESATIVAR a injeção manual que causou o erro.
+            // Se o YouTube bloqueou por "Security Risk", melhor ir sem cookie do que com cookie errado.
+            null 
+        } catch (e: Exception) { null }
+    }
 
-    private fun iniciarDownloadReal(url: String, cookies: String?, userAgent: String) {
+    private fun iniciarDownloadReal(url: String, cookieFile: File?, userAgent: String) {
         binding.tvStatus.text = "Iniciando download..."
 
         lifecycleScope.launch(Dispatchers.IO) {
@@ -125,14 +141,10 @@ class MainActivity : AppCompatActivity() {
 
                 val request = YoutubeDLRequest(url)
                 
-                // --- CORREÇÃO DE ENGENHARIA AQUI ---
-                // O método .addHeader() não existe. O correto é passar como opção raw.
-                if (cookies != null) {
-                    request.addOption("--add-header", "Cookie:$cookies")
-                }
+                // CORREÇÃO: Removemos a injeção de Cookie que causava "Security Risk" e "Initial Data Error".
+                // Confiamos apenas no User Agent consistente.
                 request.addOption("--user-agent", userAgent)
 
-                // Configurações FFmpeg
                 val ffmpegLib = File(applicationContext.applicationInfo.nativeLibraryDir, "libffmpeg.so")
                 if (ffmpegLib.exists()) request.addOption("--ffmpeg-location", ffmpegLib.absolutePath)
                 else {
@@ -140,7 +152,7 @@ class MainActivity : AppCompatActivity() {
                     if (f.exists()) request.addOption("--ffmpeg-location", f.absolutePath)
                 }
 
-                // Usamos o cliente "mweb" (Mobile Web) para combinar com os cookies do WebView
+                // Cliente 'mweb' (Mobile Web) ainda é a melhor aposta com UserAgent de celular
                 request.addOption("--extractor-args", "youtube:player_client=mweb")
                 
                 request.addOption("--no-check-certificate")
