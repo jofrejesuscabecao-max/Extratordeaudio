@@ -1,4 +1,3 @@
-// Arquivo: app/build.gradle.kts
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -12,11 +11,12 @@ android {
         applicationId = "com.example.audioextractor"
         minSdk = 24 
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0"
-        
-        // REMOVIDO: ndk { abiFilters... } 
-        // Agora o app vai gerar versões para todos os processadores (arm, x86, etc)
+        versionCode = 2 // Subi a versão
+        versionName = "1.1"
+
+        // --- MUDANÇA IMPORTANTE ---
+        // Removi o bloco "ndk { abiFilters... }"
+        // Agora o app aceita 32bits, 64bits e x86.
     }
 
     buildTypes {
