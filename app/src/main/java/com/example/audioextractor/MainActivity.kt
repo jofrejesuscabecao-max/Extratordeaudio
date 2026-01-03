@@ -30,24 +30,26 @@ class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
     private var lastDownloadedUri: Uri? = null
     private var mediaPlayer: MediaPlayer? = null
-    private var isLibInitialized = false
+    // Variável para controlar se o motor está pronto
+    private var estadoMotor = "Carregando..." 
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        // 1. Inicializa em background para não travar a tela
-        inicializarBiblioteca()
+        // Tenta iniciar assim que abre
+        iniciarMotor()
 
         binding.btnDownload.setOnClickListener {
-            // Verificação de Segurança
-            if (!isLibInitialized) {
-                mostrarErro("Aguarde", "O sistema ainda está iniciando. Tente em 5 segundos.")
+            if (estadoMotor != "Pronto") {
+                // Se o usuário clicar antes, tenta iniciar de novo
+                iniciarMotor()
+                Toast.makeText(this, "Aguarde: $estadoMotor", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
 
-            // Permissões para Android 9 ou inferior
+            // Permissões (Só para Android 9 ou menos)
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
                 if (ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
                     ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.WRITE_EXTERNAL_STORAGE), 100)
@@ -57,99 +59,99 @@ class MainActivity : AppCompatActivity() {
 
             val url = binding.etUrl.text.toString().trim()
             if (url.isNotEmpty()) {
-                startDownload(url)
+                fazerDownload(url)
             } else {
-                Toast.makeText(this, "Cole um link válido", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, "Cole um link primeiro", Toast.LENGTH_SHORT).show()
             }
         }
 
         binding.btnPlay.setOnClickListener {
-            lastDownloadedUri?.let { uri -> playAudio(uri) }
+            lastDownloadedUri?.let { uri -> tocarAudio(uri) }
         }
     }
 
-    private fun inicializarBiblioteca() {
-        binding.tvStatus.text = "Iniciando sistema..."
+    private fun iniciarMotor() {
+        binding.tvStatus.text = "Iniciando motor..."
+        
         lifecycleScope.launch(Dispatchers.IO) {
             try {
-                // Tenta inicializar. Se falhar, captura o erro.
+                // Tenta inicializar a biblioteca
                 YoutubeDL.getInstance().init(applicationContext)
-                // Atualização automática das definições (importante para sites que mudam muito)
-                try {
-                    YoutubeDL.getInstance().updateYoutubeDL(applicationContext)
-                } catch (e: Exception) {
-                    // Se falhar a atualização (sem internet), segue com a versão embarcada
-                }
                 
-                isLibInitialized = true
+                // Marca como pronto
+                estadoMotor = "Pronto"
+                
                 withContext(Dispatchers.Main) {
-                    binding.tvStatus.text = "Pronto para baixar."
+                    binding.tvStatus.text = "Motor Pronto. Pode baixar."
                 }
             } catch (e: Exception) {
+                e.printStackTrace()
+                estadoMotor = "Erro: ${e.message}"
                 withContext(Dispatchers.Main) {
-                    binding.tvStatus.text = "Erro na inicialização."
-                    mostrarErro("Erro Crítico", "Não foi possível iniciar o motor de download.\n\nMotivo: ${e.message}")
+                    binding.tvStatus.text = "Falha ao iniciar motor."
+                    mostrarAlerta("Erro Crítico no Motor", 
+                        "O sistema não conseguiu carregar os componentes.\n\n" +
+                        "Motivo Técnico: ${e.message}\n\n" +
+                        "Tente reiniciar o aplicativo ou limpar o cache.")
                 }
             }
         }
     }
 
-    private fun startDownload(url: String) {
+    private fun fazerDownload(url: String) {
         binding.progressBar.visibility = View.VISIBLE
         binding.btnDownload.isEnabled = false
-        binding.tvStatus.text = "Processando link..."
+        binding.tvStatus.text = "Baixando..."
 
         lifecycleScope.launch(Dispatchers.IO) {
             try {
-                val tempDir = File(cacheDir, "temp_downloads")
-                if (!tempDir.exists()) tempDir.mkdirs()
+                // Pasta temporária segura
+                val pastaTemp = File(cacheDir, "temp_dl")
+                if (!pastaTemp.exists()) pastaTemp.mkdirs()
                 
-                // Limpa arquivos anteriores
-                tempDir.listFiles()?.forEach { it.delete() }
+                // Limpa arquivos velhos
+                pastaTemp.listFiles()?.forEach { it.delete() }
 
                 val request = YoutubeDLRequest(url)
                 request.addOption("-x") // Extrair áudio
                 request.addOption("--audio-format", "m4a")
                 request.addOption("--no-playlist")
-                request.addOption("--no-check-certificate") // Ignora erros de SSL
-                request.addOption("-o", "${tempDir.absolutePath}/%(title)s.%(ext)s")
-                request.addOption("--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/91.0.4472.124")
-
-                withContext(Dispatchers.Main) { binding.tvStatus.text = "Baixando áudio..." }
+                request.addOption("--no-check-certificate")
+                // Salva com nome genérico para evitar erros de caracteres estranhos
+                request.addOption("-o", "${pastaTemp.absolutePath}/audio_temp.%(ext)s")
                 
-                // Executa
-                YoutubeDL.getInstance().execute(request) { progress, _, _ -> 
-                    // Progresso
+                request.addOption("--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/115.0.0.0 Safari/537.36")
+
+                YoutubeDL.getInstance().execute(request) { progress, _, _ ->
+                     withContext(Dispatchers.Main) {
+                         binding.tvStatus.text = "Progresso: $progress%"
+                     }
                 }
 
-                // Procura o arquivo gerado
-                val downloadedFile = tempDir.listFiles()
-                    ?.filter { it.extension == "m4a" || it.extension == "mp4" || it.extension == "webm" }
-                    ?.maxByOrNull { it.lastModified() }
+                // Pega o arquivo que foi gerado
+                val arquivoGerado = pastaTemp.listFiles()?.firstOrNull()
 
-                if (downloadedFile != null) {
-                    val publicUri = moveFileToDownloads(downloadedFile)
-                    
+                if (arquivoGerado != null) {
+                    val uriFinal = salvarNaGaleria(arquivoGerado)
                     withContext(Dispatchers.Main) {
-                        if (publicUri != null) {
-                            lastDownloadedUri = publicUri
-                            binding.tvStatus.text = "Sucesso!"
+                        if (uriFinal != null) {
+                            lastDownloadedUri = uriFinal
+                            binding.tvStatus.text = "Sucesso! Salvo em Downloads."
                             binding.btnPlay.isEnabled = true
-                            binding.etUrl.text?.clear()
-                            mostrarSucesso("Download Concluído", "Salvo na pasta Downloads.")
+                            mostrarAlerta("Sucesso", "Áudio salvo na pasta Downloads!")
                         } else {
-                            mostrarErro("Erro ao Salvar", "O arquivo baixou mas não consegui mover para a Galeria.")
+                            binding.tvStatus.text = "Erro ao salvar arquivo final."
                         }
                     }
                 } else {
-                    throw Exception("O download finalizou mas o arquivo de áudio não foi encontrado.")
+                    throw Exception("O download terminou mas o arquivo sumiu.")
                 }
 
             } catch (e: Exception) {
                 e.printStackTrace()
                 withContext(Dispatchers.Main) {
-                    binding.tvStatus.text = "Falha."
-                    mostrarErro("Falha no Download", "Ocorreu um erro:\n${e.message}\n\nTente outro link.")
+                    binding.tvStatus.text = "Falha no download."
+                    mostrarAlerta("Erro no Download", "Ocorreu um erro:\n${e.message}")
                 }
             } finally {
                 withContext(Dispatchers.Main) {
@@ -160,19 +162,18 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun moveFileToDownloads(tempFile: File): Uri? {
-        val resolver = contentResolver
-        val contentValues = ContentValues().apply {
-            put(MediaStore.MediaColumns.DISPLAY_NAME, "Audio_${System.currentTimeMillis()}.m4a")
+    private fun salvarNaGaleria(arquivo: File): Uri? {
+        val valores = ContentValues().apply {
+            put(MediaStore.MediaColumns.DISPLAY_NAME, "Audio_Extrator_${System.currentTimeMillis()}.m4a")
             put(MediaStore.MediaColumns.MIME_TYPE, "audio/mp4")
             put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
         }
 
         return try {
-            val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, contentValues)
+            val uri = contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, valores)
             if (uri != null) {
-                resolver.openOutputStream(uri).use { output ->
-                    FileInputStream(tempFile).use { input ->
+                contentResolver.openOutputStream(uri).use { output ->
+                    FileInputStream(arquivo).use { input ->
                         input.copyTo(output!!)
                     }
                 }
@@ -181,11 +182,12 @@ class MainActivity : AppCompatActivity() {
                 null
             }
         } catch (e: Exception) {
+            e.printStackTrace()
             null
         }
     }
 
-    private fun playAudio(uri: Uri) {
+    private fun tocarAudio(uri: Uri) {
         try {
             mediaPlayer?.release()
             mediaPlayer = MediaPlayer().apply {
@@ -193,31 +195,17 @@ class MainActivity : AppCompatActivity() {
                 prepare()
                 start()
             }
-            Toast.makeText(this, "Reproduzindo...", Toast.LENGTH_SHORT).show()
         } catch (e: Exception) {
-            Toast.makeText(this, "Erro ao tocar: ${e.message}", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "Erro ao tocar", Toast.LENGTH_SHORT).show()
         }
     }
-    
-    private fun mostrarErro(titulo: String, mensagem: String) {
+
+    private fun mostrarAlerta(titulo: String, mensagem: String) {
         AlertDialog.Builder(this)
             .setTitle(titulo)
             .setMessage(mensagem)
             .setPositiveButton("OK", null)
             .show()
-    }
-
-    private fun mostrarSucesso(titulo: String, mensagem: String) {
-        AlertDialog.Builder(this)
-            .setTitle(titulo)
-            .setMessage(mensagem)
-            .setPositiveButton("OK", null)
-            .show()
-    }
-
-    override fun onDestroy() {
-        super.onDestroy()
-        mediaPlayer?.release()
     }
 }
 
