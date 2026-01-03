@@ -122,8 +122,10 @@ class MainActivity : AppCompatActivity() {
                 
                 request.addOption("--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/115.0.0.0 Safari/537.36")
 
+                // --- CORREÇÃO DE ENGENHARIA AQUI ---
+                // Usamos runOnUiThread porque o callback do YoutubeDL não aceita Coroutines direto
                 YoutubeDL.getInstance().execute(request) { progress, _, _ ->
-                     withContext(Dispatchers.Main) {
+                     runOnUiThread {
                          binding.tvStatus.text = "Progresso: $progress%"
                      }
                 }
