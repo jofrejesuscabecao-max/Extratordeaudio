@@ -11,10 +11,10 @@ android {
         applicationId = "com.example.audioextractor"
         minSdk = 24 
         targetSdk = 34
-        versionCode = 4
-        versionName = "1.3" // Versão com Python 3.10+
+        versionCode = 5
+        versionName = "1.4"
 
-        // Mantemos o filtro para garantir compatibilidade com seu Moto G75
+        // Garante compatibilidade com Moto G75 e outros
         ndk {
             abiFilters.add("arm64-v8a")
             abiFilters.add("x86_64")
@@ -57,12 +57,10 @@ dependencies {
     implementation("com.google.android.material:material:1.11.0")
     implementation("androidx.constraintlayout:constraintlayout:2.1.4")
 
-    // --- A GRANDE MUDANÇA ---
-    // Removemos a biblioteca antiga (yausername) que tinha Python 3.8
-    // Adicionamos a biblioteca moderna (JunkFood02) que tem Python 3.10+
-    // Isso resolve o erro "Unsupported version of Python"
-    implementation("io.github.junkfood02:youtubedl-android:0.17.3")
-    implementation("io.github.junkfood02:youtubedl-android:ffmpeg:0.17.3") 
+    // --- CORREÇÃO DEFINITIVA ---
+    // JitPack usa o formato com.github.USER
+    implementation("com.github.JunkFood02:youtubedl-android:v0.17.3")
+    implementation("com.github.JunkFood02:youtubedl-android:ffmpeg:v0.17.3") 
     
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
 }
