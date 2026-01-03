@@ -10,7 +10,7 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
-        // OBRIGATÓRIO para baixar a lib do YoutubeDL
+        // OBRIGATÓRIO: O servidor onde a biblioteca está hospedada
         maven { url = uri("https://jitpack.io") } 
     }
 }
