@@ -11,10 +11,10 @@ android {
         applicationId = "com.example.audioextractor"
         minSdk = 24 
         targetSdk = 34
-        versionCode = 5
-        versionName = "1.4"
+        versionCode = 6
+        versionName = "1.5" // Versão corrigida (v0.16.1)
 
-        // Garante compatibilidade com Moto G75 e outros
+        // Compatibilidade Moto G75
         ndk {
             abiFilters.add("arm64-v8a")
             abiFilters.add("x86_64")
@@ -57,10 +57,10 @@ dependencies {
     implementation("com.google.android.material:material:1.11.0")
     implementation("androidx.constraintlayout:constraintlayout:2.1.4")
 
-    // --- CORREÇÃO DEFINITIVA ---
-    // JitPack usa o formato com.github.USER
-    implementation("com.github.JunkFood02:youtubedl-android:v0.17.3")
-    implementation("com.github.JunkFood02:youtubedl-android:ffmpeg:v0.17.3") 
+    // --- A CORREÇÃO FINAL ---
+    // Versão v0.16.1: Essa versão EXISTE, é ESTÁVEL e tem PYTHON 3.10.
+    implementation("com.github.JunkFood02:youtubedl-android:v0.16.1")
+    implementation("com.github.JunkFood02:youtubedl-android:ffmpeg:v0.16.1") 
     
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
 }
