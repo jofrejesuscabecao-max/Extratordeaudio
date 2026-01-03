@@ -10,11 +10,12 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
-        // Repositório necessário para a lib do YoutubeDL
+        // OBRIGATÓRIO para baixar a lib do YoutubeDL
         maven { url = uri("https://jitpack.io") } 
     }
 }
 
 rootProject.name = "AudioExtractor"
 include(":app")
+
 
