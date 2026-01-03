@@ -92,7 +92,6 @@ class MainActivity : AppCompatActivity() {
 
                 val request = YoutubeDLRequest(url)
                 
-                // Configuração FFmpeg
                 val ffmpegLib = File(applicationContext.applicationInfo.nativeLibraryDir, "libffmpeg.so")
                 if (ffmpegLib.exists()) request.addOption("--ffmpeg-location", ffmpegLib.absolutePath)
                 else {
@@ -100,16 +99,16 @@ class MainActivity : AppCompatActivity() {
                     if (f.exists()) request.addOption("--ffmpeg-location", f.absolutePath)
                 }
 
-                // --- BYPASS 403 FORBIDDEN ---
-                // Fingimos ser um cliente Android normal (API interna) para evitar verificação de JS
-                request.addOption("--extractor-args", "youtube:player_client=android") 
-                // Força IPv4 (Google bloqueia IPv6 de datacenters/VPNs as vezes)
+                // --- BYPASS SUPREMO (IOS) ---
+                // Mudamos de 'android' (que exige token) para 'ios' (que geralmente passa direto)
+                request.addOption("--extractor-args", "youtube:player_client=ios")
+                
+                // Força IPv4 (Essencial para evitar bloqueio de IP de servidor)
                 request.addOption("--force-ipv4")
-                // Ignora erros SSL
                 request.addOption("--no-check-certificate")
                 
-                // Formato: Tenta pegar o M4A direto, se não, pega o melhor áudio e converte
-                request.addOption("-f", "bestaudio[ext=m4a]/bestaudio")
+                // Pede o melhor áudio, mas se falhar, aceita o pior (melhor ter áudio ruim que nenhum)
+                request.addOption("-f", "bestaudio[ext=m4a]/bestaudio/best")
                 
                 request.addOption("-o", "${tempDir.absolutePath}/%(title)s.%(ext)s")
 
@@ -154,7 +153,7 @@ class MainActivity : AppCompatActivity() {
     private fun salvarDownloads(arquivo: File): Uri? {
         val valores = ContentValues().apply {
             put(MediaStore.MediaColumns.DISPLAY_NAME, "Audio_${System.currentTimeMillis()}.${arquivo.extension}")
-            put(MediaStore.MediaColumns.MIME_TYPE, "audio/${arquivo.extension}") // mp4 ou m4a
+            put(MediaStore.MediaColumns.MIME_TYPE, "audio/${arquivo.extension}") 
             put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
         }
         return try {
