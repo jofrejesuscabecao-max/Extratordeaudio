@@ -42,7 +42,7 @@ class MainActivity : AppCompatActivity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        // Configura o WebView Espião (Prepara o terreno)
+        // Prepara o WebView oculto
         configurarWebView()
         inicializarSistema()
 
@@ -55,11 +55,11 @@ class MainActivity : AppCompatActivity() {
 
             if (!isInitialized) {
                 inicializarSistema()
-                Toast.makeText(this, "Sistema iniciando... tente novamente em instantes", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, "Sistema iniciando... aguarde", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
             
-            // PASSO 1: Acessar via navegador primeiro para pegar permissão (Cookies)
+            // PASSO 1: O WebView vai lá primeiro pegar o crachá (Cookies)
             autenticarViaNavegador(url)
         }
 
@@ -72,10 +72,9 @@ class MainActivity : AppCompatActivity() {
         val webView = binding.webViewEspiao
         webView.settings.javaScriptEnabled = true
         webView.settings.domStorageEnabled = true
-        // Configura para parecer um Android moderno
+        // User Agent de um celular Android comum (Chrome)
         webView.settings.userAgentString = "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
         
-        // Garante que cookies sejam aceitos
         CookieManager.getInstance().setAcceptCookie(true)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true)
@@ -83,30 +82,28 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun autenticarViaNavegador(url: String) {
-        // Reseta UI
         binding.progressBar.visibility = View.VISIBLE
         binding.btnDownload.isEnabled = false
         binding.tvStatus.text = "Autenticando..."
         
         val webView = binding.webViewEspiao
         
-        // Define o que fazer quando a página carregar
         webView.webViewClient = object : WebViewClient() {
             override fun onPageFinished(view: WebView?, urlCarregada: String?) {
                 super.onPageFinished(view, urlCarregada)
                 
-                // A página carregou! Vamos roubar os cookies.
+                // Rouba os cookies da sessão carregada
                 val cookies = CookieManager.getInstance().getCookie(urlCarregada)
                 val userAgent = view?.settings?.userAgentString ?: "Mozilla/5.0"
                 
-                Log.d("Extrator", "Cookies capturados: $cookies")
+                Log.d("Extrator", "Cookies obtidos: $cookies")
                 
-                // Agora iniciamos o download real com as credenciais
+                // Inicia o download com as credenciais
                 iniciarDownloadReal(url, cookies, userAgent)
             }
         }
         
-        // Carrega a URL no navegador oculto
+        // Carrega a URL para gerar os cookies
         webView.loadUrl(url)
     }
 
@@ -115,7 +112,6 @@ class MainActivity : AppCompatActivity() {
 
         lifecycleScope.launch(Dispatchers.IO) {
             try {
-                // Permissões
                 if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
                     if (ContextCompat.checkSelfPermission(this@MainActivity, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
                         ActivityCompat.requestPermissions(this@MainActivity, arrayOf(Manifest.permission.WRITE_EXTERNAL_STORAGE), 100)
@@ -129,9 +125,10 @@ class MainActivity : AppCompatActivity() {
 
                 val request = YoutubeDLRequest(url)
                 
-                // Passa os Cookies capturados pelo WebView (A CHAVE MESTRA)
+                // --- CORREÇÃO DE ENGENHARIA AQUI ---
+                // O método .addHeader() não existe. O correto é passar como opção raw.
                 if (cookies != null) {
-                    request.addHeader("Cookie", cookies)
+                    request.addOption("--add-header", "Cookie:$cookies")
                 }
                 request.addOption("--user-agent", userAgent)
 
@@ -143,7 +140,7 @@ class MainActivity : AppCompatActivity() {
                     if (f.exists()) request.addOption("--ffmpeg-location", f.absolutePath)
                 }
 
-                // Cliente 'mweb' (Mobile Web) - Combina com o UserAgent do WebView
+                // Usamos o cliente "mweb" (Mobile Web) para combinar com os cookies do WebView
                 request.addOption("--extractor-args", "youtube:player_client=mweb")
                 
                 request.addOption("--no-check-certificate")
@@ -163,7 +160,6 @@ class MainActivity : AppCompatActivity() {
                     runOnUiThread {
                         if (uri != null) {
                             lastDownloadedUri = uri
-                            // Sucesso!
                             binding.tvStatus.text = "Sucesso!"
                             binding.tvFileName.text = arquivoBaixado.name
                             binding.cardPlayer.visibility = View.VISIBLE
@@ -206,7 +202,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // Lógica do Player (Tocar/Pausar)
     private fun controlarPlayer(uri: Uri) {
         try {
             if (mediaPlayer == null) {
