@@ -38,7 +38,7 @@ class MainActivity : AppCompatActivity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        // Passo 1: Iniciar e tentar atualizar o motor
+        // Tenta iniciar e atualizar logo de cara
         inicializarEAtualizar()
 
         binding.btnDownload.setOnClickListener {
@@ -49,7 +49,7 @@ class MainActivity : AppCompatActivity() {
             }
 
             if (!isInitialized) {
-                Toast.makeText(this, "Aguarde o motor ficar pronto...", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, "Aguarde a atualização do motor...", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
             
@@ -62,31 +62,32 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun inicializarEAtualizar() {
-        binding.tvStatus.text = "Preparando sistema..."
+        binding.tvStatus.text = "Verificando motor..."
         lifecycleScope.launch(Dispatchers.IO) {
             try {
-                // 1. Inicializa a versão base
+                // 1. Inicializa o básico
                 YoutubeDL.getInstance().init(applicationContext)
                 
-                // 2. ATUALIZAÇÃO CRÍTICA
-                // Verifica e baixa a versão mais recente do yt-dlp do GitHub
-                withContext(Dispatchers.Main) { binding.tvStatus.text = "Atualizando motor (Necessário)..." }
+                // 2. ATUALIZAÇÃO OBRIGATÓRIA (Resolve o erro 403)
+                // Isso conecta no GitHub e baixa a versão do yt-dlp de HOJE.
+                withContext(Dispatchers.Main) { binding.tvStatus.text = "Atualizando definições..." }
                 
                 try {
-                    // Isso baixa a versão mais nova que corrige o erro 403
+                    // Atualiza para a versão estável mais recente
                     YoutubeDL.getInstance().updateYoutubeDL(applicationContext, YoutubeDL.UpdateChannel.STABLE)
                 } catch (e: Exception) {
-                    Log.e("Extrator", "Falha ao atualizar (pode ser sem internet)", e)
+                    Log.e("Extrator", "Erro ao atualizar (sem internet?)", e)
                 }
 
                 isInitialized = true
+                // Mostra a versão na tela para confirmar
                 val versao = YoutubeDL.getInstance().version(applicationContext)
                 
                 runOnUiThread { 
-                    binding.tvStatus.text = "Pronto (v$versao). Cole o link." 
+                    binding.tvStatus.text = "Motor v$versao Pronto. Cole o link." 
                 }
             } catch (e: Exception) {
-                runOnUiThread { binding.tvStatus.text = "Erro init: ${e.message}" }
+                runOnUiThread { binding.tvStatus.text = "Erro Fatal: ${e.message}" }
             }
         }
     }
@@ -112,10 +113,10 @@ class MainActivity : AppCompatActivity() {
 
                 val request = YoutubeDLRequest(url)
                 
-                // --- CONFIGURAÇÃO PÓS-ATUALIZAÇÃO ---
-                // Com o motor atualizado, usamos o cliente padrão 'android' que tem melhor qualidade
-                // Não precisamos mais de bypass maluco se o motor for novo.
-                
+                // --- CORREÇÃO DO ERRO DE COMPILAÇÃO ---
+                // Removi o 'addHeader' que não existe.
+                // Com o motor atualizado pela função acima, o 403 deve sumir sem precisar de truques.
+
                 val ffmpegLib = File(applicationContext.applicationInfo.nativeLibraryDir, "libffmpeg.so")
                 if (ffmpegLib.exists()) request.addOption("--ffmpeg-location", ffmpegLib.absolutePath)
                 else {
@@ -123,11 +124,9 @@ class MainActivity : AppCompatActivity() {
                     if (f.exists()) request.addOption("--ffmpeg-location", f.absolutePath)
                 }
 
+                // Configuração Padrão Robusta
                 request.addOption("--no-check-certificate")
-                
-                // Garante formato m4a (áudio eficiente)
-                request.addOption("-f", "bestaudio[ext=m4a]/bestaudio")
-                
+                request.addOption("-f", "bestaudio[ext=m4a]/bestaudio/best")
                 request.addOption("-o", "${tempDir.absolutePath}/%(title)s.%(ext)s")
 
                 runOnUiThread { binding.tvStatus.text = "Baixando..." }
@@ -170,8 +169,6 @@ class MainActivity : AppCompatActivity() {
             }
         }
     }
-
-    // --- FUNÇÕES AUXILIARES (Salvar, Tocar, Alerta) ---
 
     private fun salvarDownloads(arquivo: File): Uri? {
         val valores = ContentValues().apply {
